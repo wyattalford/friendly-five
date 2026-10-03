@@ -1,0 +1,13 @@
+## User Journey
+
+Wyatt and his friend Alex are discussing Georgia Tech’s upcoming football game when they decide to bet lunch on whether Tech will win by more than seven points. A previous bet ended with different memories of the terms, so Wyatt wants to make this agreement clear before the game. They also agree that their friend Morgan can decide the outcome if they disagree.
+
+Wyatt opens **My Agreements** and selects **New Agreement** (Sketch 1). On the proposal form (Sketch 2), he names the specific game and states that Georgia Tech must win by more than seven points, including overtime. Wyatt backs true, Alex backs false, and each person’s losing stake is lunch up to $15. He sets the resolution cutoff after the game, lists the official final score as the outcome source, and designates Morgan as resolver. Wyatt sends the proposal and shares its invitation link with Alex.
+
+Alex opens the agreement review screen (Sketch 3) and checks the margin, overtime rule, stakes, and resolver before accepting. The terms become fixed, giving both friends the same record to consult. Wyatt feels comfortable proceeding because neither person can change the conditions after seeing the result.
+
+Georgia Tech wins by exactly seven points. After the cutoff, Wyatt mistakenly reports that the claim is true and attaches the official score (Sketch 4). Alex disputes the report, explaining that winning by exactly seven does not satisfy “more than seven.” Wyatt initially thinks their conversation meant seven or more, but the disagreement stays focused on the recorded terms rather than becoming a personal argument.
+
+Morgan opens the resolver’s dispute screen (Sketch 5), reviews the accepted wording, Wyatt’s report, and Alex’s explanation. Morgan selects **Claim false** and explains that the official winning margin was seven, while the agreement required more than seven. Before finalizing, Morgan checks the preview showing that Wyatt will owe Alex lunch. The decision then becomes final.
+
+Wyatt accepts that he misread the condition, and Alex appreciates that they followed the process both had agreed to. Wyatt buys lunch and reports fulfillment. Alex confirms receipt through the agreement detail screen (Sketch 4), completing the obligation. Over lunch, they joke about Wyatt’s prediction, and Morgan joins them. All three are comfortable with the decision, and Wyatt and Alex remain friends because the disagreement was settled using shared terms and an agreed resolver.
