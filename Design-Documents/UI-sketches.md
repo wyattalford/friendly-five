@@ -16,7 +16,7 @@ The proposer states the terms and how the outcome will be determined. Sending ac
 
 ![Agreement review showing current terms, acceptance, revision, and the accepted state](images/sketch-3-review-agreement.png)
 
-The counterpart reviews the current terms and can accept, suggest changes, or reject. Terms are read-only here. TThe current proposal author can suggest changes or withdraw while it is pending. The other participant can suggest changes, accept, or reject. Acceptance fixes the terms and records the agreement date. 
+The counterpart reviews the current terms and can accept, suggest changes, or reject. Terms are read-only here. The current proposal author can suggest changes or withdraw while it is pending. The other participant can suggest changes, accept, or reject. Acceptance fixes the terms and records the agreement date. 
 
 ## Sketch 4 — Resolve and Fulfill
 
