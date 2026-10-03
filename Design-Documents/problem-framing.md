@@ -9,7 +9,7 @@ The primary stakeholders here are the people making the bet. Stakeholders partic
 
 - **Bet proposer:** Starts the bet by proposing a claim and stakes, and needs a clear record of what the other person accepted.
 - **Invited participant:** Reviews and may negotiate the proposal, and needs to understand the terms before committing to an obligation.
-- **Neutral resolver:** A person trusted by both participants who may judge the outcome or resolve a dispute, and needs agreed terms and relevant evidence to make a fair decision.
+- **Agreed resolver:** A participant or third party selected by both participants to judge the outcome or resolve a dispute using the accepted terms and relevant evidence.
 - **Person whose behavior is being bet on:** May be affected by attention or pressure from a bet about their actions, even if they are not one of the participants, and could also be the neutral resolver.
 
 ### Bad Situations
@@ -51,7 +51,7 @@ I propose a web app that treats a friendly bet as a shared agreement rather than
 
 The interaction should remain close to how these bets already begin. A creator can share a link in the text or group chat where the conversation is happening. The purpose is not to make a five-dollar bet feel like a legal contract, but to record the few decisions that become difficult to make fairly after the outcome is known.
 
-When the deadline arrives, a participant or the designated resolver submits an outcome and may attach supporting evidence. The other participant either confirms it or disputes it. If the resolution is disputed, the chosen resolver decides. If no resolver was selected, both participants must agree on the outcome or void the bet. The app records the result and whether any external obligation was completed, but it does not hold or transfer money, keeping payment and regulatory complexity outside the project’s scope.
+After the deadline, a participant submits an outcome with supporting evidence or an explanation. The other participant can confirm or dispute it. A designated resolver may finalize the outcome without further participant confirmation. Without a resolver, both participants must agree on the outcome or on voiding the bet. The app records the result and fulfillment of the resulting obligation, while payments and other fulfillment happen outside it.
 
 The first version will support only one-on-one bets, externally settled stakes, and invited resolvers. Public markets, tradable contracts, automated sports feeds, and in-app payments will remain outside its scope.
 

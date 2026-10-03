@@ -47,10 +47,6 @@ state
 
   Rule: acceptedAt exists exactly when status is ACCEPTED.
 
-  Rule: A version's claim, deadline, stakes, exceptions, resolutionRule,
-    resolver, author, and number are immutable. Earlier versions and
-    their acceptance records are retained.
-
 actions
   propose (initiator: User, counterpart: User, claim: String,
     deadline: DateTime, initiatorStake: String, counterpartStake: String,
