@@ -43,10 +43,11 @@ a seq of Reports with
   an author User
   an outcome Outcome
   an optional evidence String
+  a reportedAt DateTime
   an optional disputedBy User
   an optional disputeReason String
 
-Rule: Each currentReport belongs to its case. Report authors, outcomes, and evidence are immutable.
+Rule: Each currentReport belongs to its case. Report authors, outcomes, evidence, and reportedAt are immutable.
 Rule: resolvedAt exists exactly when status is FINAL. A FINAL case has a currentReport recording its final outcome.
 ```
 
@@ -63,7 +64,7 @@ open(item: Item, first: User, second: User, cutoff: DateTime, resolutionRule: St
 submit(user: User, case: Case, outcome: Outcome, evidence?: String) : returns (report: Report)
   where case exists with status OPEN or DISPUTED, user is its first or second participant, the current time is at or after its cutoff, and evidence, if supplied, is not blank
   then
-    add a new report with case, author user, outcome, evidence if supplied, and no disputedBy or disputeReason
+    add a new report with case, author user, outcome, evidence if supplied, reportedAt set to the current time, and no disputedBy or disputeReason
     set case's currentReport to report and status to PROPOSED
     returns report
 
@@ -84,7 +85,7 @@ dispute(user: User, case: Case, report: Report, reason: String) : returns ()
 decide(user: User, case: Case, outcome: Outcome, evidence: String) : returns (report: Report)
   where case exists with status OPEN or PROPOSED or DISPUTED, user is its designated resolver, the current time is at or after its cutoff, and evidence is not blank
   then
-    add a new report with case, author user, outcome, evidence, and no disputedBy or disputeReason
+    add a new report with case, author user, outcome, evidence, reportedAt set to the current time, and no disputedBy or disputeReason
     set case's currentReport to report and status to FINAL
     set case's resolvedAt to the current time
     returns report
