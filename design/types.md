@@ -15,4 +15,8 @@ instantiate Agreeing with
 instantiate Resolving with
   User is Authenticating.User
   Item is Agreeing.Agreement
+
+instantiate ObligationTracking with
+  User is Authenticating.User
+  Item is Agreeing.Agreement
 ```

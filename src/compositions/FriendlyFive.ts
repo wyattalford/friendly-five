@@ -2,7 +2,7 @@ import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { no, reaction, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concepts.ts";
 
-const { Agreeing, Authenticating, Resolving } = concepts;
+const { Agreeing, Authenticating, Resolving, ObligationTracking } = concepts;
 
 const Register = endpoint(
   "/auth/register",
@@ -329,8 +329,114 @@ const DecideOutcome = endpoint(
   { input: { required: ["session", "case", "outcome", "evidence"] } },
 );
 
+const GetObligation = endpoint(
+  "/obligations/get",
+  ({ session, obligation, user, item, owing, recipient, description, status, currentReport, confirmedAt }) =>
+    receive({ session, obligation })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(ObligationTracking._get({ obligation }).is({ item, owing: user, recipient, description, status, currentReport, confirmedAt }))
+          .then(respond({ obligation, item, owing: user, recipient, description, status, currentReport, confirmedAt }))
+          .named("owing"),
+        where(ObligationTracking._get({ obligation }).is({ item, owing, recipient: user, description, status, currentReport, confirmedAt }))
+          .then(respond({ obligation, item, owing, recipient: user, description, status, currentReport, confirmedAt }))
+          .named("recipient"),
+        where(no(ObligationTracking._get({ obligation }))).then(respond({ error: "OBLIGATION_NOT_FOUND" })).named("missing"),
+      ),
+  { input: { required: ["session", "obligation"] } },
+);
+
+const ReportCompletion = endpoint(
+  "/obligations/report",
+  ({ session, obligation, evidence, user, report }) =>
+    receive({ session, obligation, evidence })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(ObligationTracking.reportCompletion({ user, obligation, evidence }).responds({ report }))
+      .then(respond({ report })),
+  { input: { required: ["session", "obligation"], defaults: { evidence: null } } },
+);
+
+const ConfirmReceipt = endpoint(
+  "/obligations/confirm",
+  ({ session, obligation, report, user }) =>
+    receive({ session, obligation, report })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(ObligationTracking.confirmReceipt({ user, obligation, report }).responds({}))
+      .then(respond({ confirmed: true })),
+  { input: { required: ["session", "obligation", "report"] } },
+);
+
+const DisputeReceipt = endpoint(
+  "/obligations/dispute",
+  ({ session, obligation, report, evidence, user }) =>
+    receive({ session, obligation, report, evidence })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(ObligationTracking.disputeReceipt({ user, obligation, report, evidence }).responds({}))
+      .then(respond({ disputed: true })),
+  { input: { required: ["session", "obligation", "report", "evidence"] } },
+);
+
+const FinalTrueDecisionRecordsObligation = reaction(({ resolver, resolutionCase, report, item, first, second, decisionEvidence, currentVersion, counterpartStake }) =>
+  when(Resolving.decide({ user: resolver, case: resolutionCase, outcome: "TRUE", evidence: decisionEvidence }).responds({ report }))
+    .where(
+      Resolving._get({ case: resolutionCase }).is({ item, resolver, status: "FINAL", currentReport: report }),
+      Resolving._current({ case: resolutionCase }).is({ report, outcome: "TRUE", evidence: decisionEvidence }),
+      Agreeing._get({ agreement: item }).is({ initiator: first, counterpart: second, currentVersion }),
+      Agreeing._version({ version: currentVersion }).is({ agreement: item, counterpartStake }),
+    )
+    .then(ObligationTracking.record({ item, owing: second, recipient: first, description: counterpartStake })),
+);
+
+const FinalFalseDecisionRecordsObligation = reaction(({ resolver, resolutionCase, report, item, first, second, decisionEvidence, currentVersion, initiatorStake }) =>
+  when(Resolving.decide({ user: resolver, case: resolutionCase, outcome: "FALSE", evidence: decisionEvidence }).responds({ report }))
+    .where(
+      Resolving._get({ case: resolutionCase }).is({ item, resolver, status: "FINAL", currentReport: report }),
+      Resolving._current({ case: resolutionCase }).is({ report, outcome: "FALSE", evidence: decisionEvidence }),
+      Agreeing._get({ agreement: item }).is({ initiator: first, counterpart: second, currentVersion }),
+      Agreeing._version({ version: currentVersion }).is({ agreement: item, initiatorStake }),
+    )
+    .then(ObligationTracking.record({ item, owing: first, recipient: second, description: initiatorStake })),
+);
+
+const ConfirmedTrueOutcomeRecordsObligation = reaction(({ confirmer, resolutionCase, report, item, first, second, currentVersion, counterpartStake }) =>
+  when(Resolving.confirm({ user: confirmer, case: resolutionCase, report }).responds({}))
+    .then(
+      where(
+        Resolving._get({ case: resolutionCase }).is({ first: confirmer, item, status: "FINAL", currentReport: report }),
+        Resolving._current({ case: resolutionCase }).is({ report, outcome: "TRUE" }),
+        Agreeing._get({ agreement: item }).is({ initiator: first, counterpart: second, currentVersion }),
+        Agreeing._version({ version: currentVersion }).is({ agreement: item, counterpartStake }),
+      ).then(ObligationTracking.record({ item, owing: second, recipient: first, description: counterpartStake })).named("first-confirmation"),
+      where(
+        Resolving._get({ case: resolutionCase }).is({ second: confirmer, item, status: "FINAL", currentReport: report }),
+        Resolving._current({ case: resolutionCase }).is({ report, outcome: "TRUE" }),
+        Agreeing._get({ agreement: item }).is({ initiator: first, counterpart: second, currentVersion }),
+        Agreeing._version({ version: currentVersion }).is({ agreement: item, counterpartStake }),
+      ).then(ObligationTracking.record({ item, owing: second, recipient: first, description: counterpartStake })).named("second-confirmation"),
+    ),
+);
+
+const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolutionCase, report, item, first, second, currentVersion, initiatorStake }) =>
+  when(Resolving.confirm({ user: confirmer, case: resolutionCase, report }).responds({}))
+    .then(
+      where(
+        Resolving._get({ case: resolutionCase }).is({ first: confirmer, item, status: "FINAL", currentReport: report }),
+        Resolving._current({ case: resolutionCase }).is({ report, outcome: "FALSE" }),
+        Agreeing._get({ agreement: item }).is({ initiator: first, counterpart: second, currentVersion }),
+        Agreeing._version({ version: currentVersion }).is({ agreement: item, initiatorStake }),
+      ).then(ObligationTracking.record({ item, owing: first, recipient: second, description: initiatorStake })).named("first-confirmation"),
+      where(
+        Resolving._get({ case: resolutionCase }).is({ second: confirmer, item, status: "FINAL", currentReport: report }),
+        Resolving._current({ case: resolutionCase }).is({ report, outcome: "FALSE" }),
+        Agreeing._get({ agreement: item }).is({ initiator: first, counterpart: second, currentVersion }),
+        Agreeing._version({ version: currentVersion }).is({ agreement: item, initiatorStake }),
+      ).then(ObligationTracking.record({ item, owing: first, recipient: second, description: initiatorStake })).named("second-confirmation"),
+    ),
+);
+
 export const composition = {
   Accounts: { Register, SignIn },
   Agreements: { Propose, Get, Accept },
-  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome },
+  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
+  Obligations: { GetObligation, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };
