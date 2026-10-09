@@ -11,4 +11,8 @@ instantiate Authenticating
 
 instantiate Agreeing with
   User is Authenticating.User
+
+instantiate Resolving with
+  User is Authenticating.User
+  Item is Agreeing.Agreement
 ```

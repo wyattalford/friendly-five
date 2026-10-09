@@ -4,6 +4,7 @@ import { AuthenticatingConcept } from "./concepts/Authenticating.ts";
 import { applicationConceptSet } from "./concepts.ts";
 import { db } from "./db.ts";
 import { composition } from "./compositions/FriendlyFive.ts";
+import { ResolvingConcept } from "./concepts/Resolving.ts";
 
 export function assembleApplication() {
   return assemble({
@@ -11,6 +12,7 @@ export function assembleApplication() {
     instances: {
       Authenticating: new AuthenticatingConcept(db),
       Agreeing: new AgreeingConcept(db),
+      Resolving: new ResolvingConcept(db),
     },
     composition: { FriendlyFive: composition },
     rawFaultReporter: ({ error }) => console.error(error),

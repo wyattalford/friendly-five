@@ -21,7 +21,9 @@ rule, and optional resolver. When a case becomes final with TRUE or FALSE, the
 application records exactly one obligation using the losing party's accepted
 stake. VOID produces no obligation. Invitation links identify an agreement but
 do not grant authority to accept, revise, report, dispute, decide, or view
-private terms.
+private terms. The accepted-agreement reaction opens a case even when no
+resolver was designated, allowing the participants to confirm an ordinary
+outcome themselves.
 
 ```endpoints
 FriendlyFive.Accounts.Register at /auth/register
@@ -29,4 +31,19 @@ FriendlyFive.Accounts.SignIn at /auth/sign-in
 FriendlyFive.Agreements.Propose at /agreements/propose
 FriendlyFive.Agreements.Get at /agreements/get
 FriendlyFive.Agreements.Accept at /agreements/accept
+FriendlyFive.Outcomes.GetResolution at /resolutions/get
+FriendlyFive.Outcomes.GetCurrentReport at /resolutions/current
+FriendlyFive.Outcomes.ReportOutcome at /resolutions/report
+FriendlyFive.Outcomes.ConfirmOutcome at /resolutions/confirm
+FriendlyFive.Outcomes.DisputeOutcome at /resolutions/dispute
+FriendlyFive.Outcomes.DecideOutcome at /resolutions/decide
 ```
+
+The resolution endpoints are [case review](reaction:FriendlyFive.Outcomes.GetResolution),
+[current report review](reaction:FriendlyFive.Outcomes.GetCurrentReport),
+[outcome reporting](reaction:FriendlyFive.Outcomes.ReportOutcome),
+[outcome confirmation](reaction:FriendlyFive.Outcomes.ConfirmOutcome),
+[outcome disputes](reaction:FriendlyFive.Outcomes.DisputeOutcome), and
+[resolver decisions](reaction:FriendlyFive.Outcomes.DecideOutcome).
+
+The cross-concept link is [accepted agreements open resolution cases](reaction:FriendlyFive.Outcomes.AcceptedAgreementOpensCase).

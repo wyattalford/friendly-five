@@ -1,8 +1,8 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { no, where } from "@mit-sdg/sync-engine/language";
+import { no, reaction, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concepts.ts";
 
-const { Agreeing, Authenticating } = concepts;
+const { Agreeing, Authenticating, Resolving } = concepts;
 
 const Register = endpoint(
   "/auth/register",
@@ -149,7 +149,188 @@ const Accept = endpoint(
   { input: { required: ["session", "agreement", "version"] } },
 );
 
+const AcceptedAgreementOpensCase = reaction(
+  ({ agreement, version, acceptingUser, initiator, counterpart, deadline, resolutionRule, resolver }) =>
+    when(Agreeing.accept({ user: acceptingUser, agreement, version }).responds({}))
+      .then(
+        where(
+          Agreeing._get({ agreement }).is({
+            initiator: acceptingUser,
+            counterpart,
+            status: "ACCEPTED",
+            currentVersion: version,
+          }),
+          Agreeing._version({ version }).is({ agreement, deadline, resolutionRule, resolver }),
+        ).then(
+          Resolving.open({
+            item: agreement,
+            first: acceptingUser,
+            second: counterpart,
+            cutoff: deadline,
+            resolutionRule,
+            resolver,
+          }),
+        ).named("initiator-with-resolver"),
+        where(
+          Agreeing._get({ agreement }).is({
+            initiator: acceptingUser,
+            counterpart,
+            status: "ACCEPTED",
+            currentVersion: version,
+          }),
+          Agreeing._version({ version }).is({ agreement, deadline, resolutionRule }),
+          no(Agreeing._designatedResolver({ agreement })),
+        ).then(
+          Resolving.open({
+            item: agreement,
+            first: acceptingUser,
+            second: counterpart,
+            cutoff: deadline,
+            resolutionRule,
+          }),
+        ).named("initiator-without-resolver"),
+        where(
+          Agreeing._get({ agreement }).is({
+            initiator,
+            counterpart: acceptingUser,
+            status: "ACCEPTED",
+            currentVersion: version,
+          }),
+          Agreeing._version({ version }).is({ agreement, deadline, resolutionRule, resolver }),
+        ).then(
+          Resolving.open({
+            item: agreement,
+            first: initiator,
+            second: acceptingUser,
+            cutoff: deadline,
+            resolutionRule,
+            resolver,
+          }),
+        ).named("counterpart-with-resolver"),
+        where(
+          Agreeing._get({ agreement }).is({
+            initiator,
+            counterpart: acceptingUser,
+            status: "ACCEPTED",
+            currentVersion: version,
+          }),
+          Agreeing._version({ version }).is({ agreement, deadline, resolutionRule }),
+          no(Agreeing._designatedResolver({ agreement })),
+        ).then(
+          Resolving.open({
+            item: agreement,
+            first: initiator,
+            second: acceptingUser,
+            cutoff: deadline,
+            resolutionRule,
+          }),
+        ).named("counterpart-without-resolver"),
+      ),
+);
+
+const GetResolution = endpoint(
+  "/resolutions/get",
+  ({ session, case: caseId, user, item, first, second, cutoff, resolutionRule, status }) =>
+    receive({ session, case: caseId })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(
+          Resolving._get({ case: caseId }).is({ item, first: user, second, cutoff, resolutionRule, status }),
+        )
+          .then(respond({ case: caseId, item, first: user, second, cutoff, resolutionRule, status }))
+          .named("first"),
+        where(
+          Resolving._get({ case: caseId }).is({ item, first, second: user, cutoff, resolutionRule, status }),
+        )
+          .then(respond({ case: caseId, item, first, second: user, cutoff, resolutionRule, status }))
+          .named("second"),
+        where(
+          Resolving._get({ case: caseId }).is({ item, first, second, cutoff, resolutionRule, resolver: user, status }),
+        )
+          .then(respond({ case: caseId, item, first, second, cutoff, resolutionRule, resolver: user, status }))
+          .named("resolver"),
+        where(no(Resolving._get({ case: caseId }))).then(respond({ error: "RESOLUTION_NOT_FOUND" })).named("missing"),
+      ),
+  { input: { required: ["session", "case"] } },
+);
+
+const GetCurrentReport = endpoint(
+  "/resolutions/current",
+  ({ session, case: caseId, user, report, author, outcome, evidence, reportedAt }) =>
+    receive({ session, case: caseId })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(
+          Resolving._get({ case: caseId }).is({ first: user }),
+          Resolving._currentWithEvidence({ case: caseId }).is({ report, author, outcome, evidence, reportedAt }),
+        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt })).named("first-with-evidence"),
+        where(
+          Resolving._get({ case: caseId }).is({ first: user }),
+          Resolving._currentWithoutEvidence({ case: caseId }).is({ report, author, outcome, reportedAt }),
+        ).then(respond({ case: caseId, report, author, outcome, reportedAt })).named("first-without-evidence"),
+        where(
+          Resolving._get({ case: caseId }).is({ second: user }),
+          Resolving._currentWithEvidence({ case: caseId }).is({ report, author, outcome, evidence, reportedAt }),
+        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt })).named("second-with-evidence"),
+        where(
+          Resolving._get({ case: caseId }).is({ second: user }),
+          Resolving._currentWithoutEvidence({ case: caseId }).is({ report, author, outcome, reportedAt }),
+        ).then(respond({ case: caseId, report, author, outcome, reportedAt })).named("second-without-evidence"),
+        where(
+          Resolving._get({ case: caseId }).is({ resolver: user }),
+          Resolving._currentWithEvidence({ case: caseId }).is({ report, author, outcome, evidence, reportedAt }),
+        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt })).named("resolver-with-evidence"),
+        where(
+          Resolving._get({ case: caseId }).is({ resolver: user }),
+          Resolving._currentWithoutEvidence({ case: caseId }).is({ report, author, outcome, reportedAt }),
+        ).then(respond({ case: caseId, report, author, outcome, reportedAt })).named("resolver-without-evidence"),
+        where(no(Resolving._get({ case: caseId }))).then(respond({ error: "RESOLUTION_NOT_FOUND" })).named("missing"),
+      ),
+  { input: { required: ["session", "case"] } },
+);
+
+const ReportOutcome = endpoint(
+  "/resolutions/report",
+  ({ session, case: caseId, outcome, evidence, user, report }) =>
+    receive({ session, case: caseId, outcome, evidence })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Resolving.submit({ user, case: caseId, outcome, evidence }).responds({ report }))
+      .then(respond({ report })),
+  { input: { required: ["session", "case", "outcome"], defaults: { evidence: null } } },
+);
+
+const ConfirmOutcome = endpoint(
+  "/resolutions/confirm",
+  ({ session, case: caseId, report, user }) =>
+    receive({ session, case: caseId, report })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Resolving.confirm({ user, case: caseId, report }).responds({}))
+      .then(respond({ confirmed: true })),
+  { input: { required: ["session", "case", "report"] } },
+);
+
+const DisputeOutcome = endpoint(
+  "/resolutions/dispute",
+  ({ session, case: caseId, report, reason, user }) =>
+    receive({ session, case: caseId, report, reason })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Resolving.dispute({ user, case: caseId, report, reason }).responds({}))
+      .then(respond({ disputed: true })),
+  { input: { required: ["session", "case", "report", "reason"] } },
+);
+
+const DecideOutcome = endpoint(
+  "/resolutions/decide",
+  ({ session, case: caseId, outcome, evidence, user, report }) =>
+    receive({ session, case: caseId, outcome, evidence })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Resolving.decide({ user, case: caseId, outcome, evidence }).responds({ report }))
+      .then(respond({ report })),
+  { input: { required: ["session", "case", "outcome", "evidence"] } },
+);
+
 export const composition = {
   Accounts: { Register, SignIn },
   Agreements: { Propose, Get, Accept },
+  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome },
 };
