@@ -1,0 +1,32 @@
+{
+  "name": "friendly-five",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "dependencies": {
+    "@mit-sdg/sync-engine": "1.1.0",
+    "@mit-sdg/sync-engine-http": "1.1.0",
+    "mongodb": "7.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/node": "^24.0.0",
+    "typescript": ">=6 <7"
+  },
+  "overrides": {
+    "bson": "7.2.0"
+  },
+  "scripts": {
+    "generate": "sync-engine artifacts pin",
+    "check": "sync-engine check && sync-engine artifacts check && tsc --noEmit",
+    "check:design": "sync-engine check-design design/concepts/*.md design/types.md design/compositions/*.md",
+    "start": "bun src/main.ts",
+    "dev": "bun run db:up && bun run --parallel dev:backend dev:frontend",
+    "dev:backend": "bun --watch src/main.ts",
+    "dev:frontend": "bun --watch web/server.ts",
+    "db:up": "podman compose up -d mongo",
+    "db:shell": "podman compose exec mongo mongosh -u dev -p dev --authenticationDatabase admin",
+    "db:logs": "podman compose logs mongo",
+    "db:reset": "podman compose down -v"
+  }
+}
