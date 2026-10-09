@@ -52,6 +52,10 @@ function validTerms(claim: string, initiatorStake: string, counterpartStake: str
   return [claim, initiatorStake, counterpartStake, resolutionRule].every((value) => value.trim() !== "");
 }
 
+function asDate(value: Date): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
 function termsDiffer(version: VersionDocument, terms: Terms): boolean {
   return (
     version.claim !== terms.claim ||
@@ -105,11 +109,12 @@ export class AgreeingConcept {
     resolutionRule: string;
     resolver?: string;
   }) {
+    const due = asDate(deadline);
     if (initiator === counterpart) throw new ProposalSameParticipant("The two agreement participants must be different people.");
     if (!validTerms(claim, initiatorStake, counterpartStake, resolutionRule)) {
       throw new ProposalInvalidTerms("A claim, both stakes, and a resolution rule are required.");
     }
-    if (deadline.getTime() <= Date.now()) {
+    if (due.getTime() <= Date.now() || Number.isNaN(due.getTime())) {
       throw new ProposalInvalidDeadline("The agreement deadline must be in the future.");
     }
 
@@ -130,7 +135,7 @@ export class AgreeingConcept {
         number: 1,
         author: initiator,
         claim,
-        deadline,
+        deadline: due,
         initiatorStake,
         counterpartStake,
         exceptions,
@@ -169,6 +174,7 @@ export class AgreeingConcept {
     resolutionRule: string;
     resolver?: string;
   }) {
+    const due = asDate(deadline);
     const record = await this.agreements.findOne({ _id: agreement });
     if (record === null || record.status !== "PENDING") throw new RevisionNotPending("Only a pending agreement can be revised.");
     if (user !== record.initiator && user !== record.counterpart) throw new RevisionNotParticipant("Only an agreement participant can revise its terms.");
@@ -177,8 +183,8 @@ export class AgreeingConcept {
     if (current === null) throw new RevisionStaleVersion("Those terms are no longer the current version.");
     if (current.deadline.getTime() <= Date.now()) throw new RevisionExpired("The current version's deadline has passed.");
     if (!validTerms(claim, initiatorStake, counterpartStake, resolutionRule)) throw new RevisionInvalidTerms("A claim, both stakes, and a resolution rule are required.");
-    if (deadline.getTime() <= Date.now()) throw new RevisionInvalidDeadline("The agreement deadline must be in the future.");
-    const terms = { claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver };
+    if (due.getTime() <= Date.now() || Number.isNaN(due.getTime())) throw new RevisionInvalidDeadline("The agreement deadline must be in the future.");
+    const terms = { claim, deadline: due, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver };
     if (!termsDiffer(current, terms)) throw new RevisionUnchanged("A revision must change at least one term.");
 
     await ensureIndexes(this.agreements, this.versions);
@@ -218,5 +224,45 @@ export class AgreeingConcept {
     if (current === null || user !== current.author) throw new WithdrawalNotAuthorized("Only the current version's author can withdraw it.");
     await this.agreements.updateOne({ _id: agreement, status: "PENDING", currentVersion: version }, { $set: { status: "WITHDRAWN" } });
     return {};
+  }
+
+  async _get({ agreement }: { agreement: string }) {
+    const record = await this.agreements.findOne({ _id: agreement });
+    if (record === null) return [];
+    return [
+      {
+        initiator: record.initiator,
+        counterpart: record.counterpart,
+        status: record.status,
+        currentVersion: record.currentVersion,
+        ...(record.acceptedAt === undefined ? {} : { acceptedAt: record.acceptedAt }),
+      },
+    ];
+  }
+
+  async _version({ version }: { version: string }) {
+    const record = await this.versions.findOne({ _id: version });
+    if (record === null) return [];
+    return [
+      {
+        agreement: record.agreement,
+        number: record.number,
+        author: record.author,
+        claim: record.claim,
+        deadline: record.deadline,
+        initiatorStake: record.initiatorStake,
+        counterpartStake: record.counterpartStake,
+        exceptions: record.exceptions,
+        resolutionRule: record.resolutionRule,
+        ...(record.resolver === undefined ? {} : { resolver: record.resolver }),
+      },
+    ];
+  }
+
+  async _designatedResolver({ agreement }: { agreement: string }) {
+    const record = await this.agreements.findOne({ _id: agreement });
+    if (record === null) return [];
+    const version = await this.versions.findOne({ _id: record.currentVersion });
+    return version?.resolver === undefined ? [] : [{ resolver: version.resolver }];
   }
 }

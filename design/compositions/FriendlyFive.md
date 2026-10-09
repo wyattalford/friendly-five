@@ -9,6 +9,12 @@ The application authorizes each domain action from roles owned by the relevant
 concept. It never accepts a user identifier supplied by the browser as proof of
 who is acting.
 
+The account setup endpoints are [registration](reaction:FriendlyFive.Accounts.Register)
+and [sign-in](reaction:FriendlyFive.Accounts.SignIn). The proposal flow resolves
+counterpart and resolver usernames before invoking [Agreeing.propose](reaction:FriendlyFive.Agreements.Propose).
+Participants and an agreed resolver can read the accepted terms through [agreement review](reaction:FriendlyFive.Agreements.Get),
+and the counterpart accepts through [agreement acceptance](reaction:FriendlyFive.Agreements.Accept).
+
 When the counterpart accepts the current agreement version, the application
 opens one resolution case using the accepted participants, deadline, resolution
 rule, and optional resolver. When a case becomes final with TRUE or FALSE, the
@@ -21,11 +27,6 @@ private terms.
 FriendlyFive.Accounts.Register at /auth/register
 FriendlyFive.Accounts.SignIn at /auth/sign-in
 FriendlyFive.Agreements.Propose at /agreements/propose
-FriendlyFive.Agreements.Accept at /agreements/accept
 FriendlyFive.Agreements.Get at /agreements/get
-FriendlyFive.Outcomes.Submit at /outcomes/submit
-FriendlyFive.Outcomes.Dispute at /outcomes/dispute
-FriendlyFive.Outcomes.Decide at /outcomes/decide
-FriendlyFive.Obligations.ReportCompletion at /obligations/report-completion
-FriendlyFive.Obligations.ConfirmReceipt at /obligations/confirm-receipt
+FriendlyFive.Agreements.Accept at /agreements/accept
 ```

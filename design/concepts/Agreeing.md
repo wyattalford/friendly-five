@@ -152,4 +152,10 @@ withdraw(user: User, agreement: Agreement, version: Version) : returns ()
 ## Queries
 
 ```queries
+_get(agreement: Agreement) : optional (initiator: User, counterpart: User, status: AgreementStatus, currentVersion: Version, acceptedAt?: DateTime)
+  Answers the agreement and its current state, or no row when the agreement is unknown.
+_version(version: Version) : optional (agreement: Agreement, number: Number, author: User, claim: String, deadline: DateTime, initiatorStake: String, counterpartStake: String, exceptions: String, resolutionRule: String, resolver?: User)
+  Answers immutable version terms, or no row when the version is unknown.
+_designatedResolver(agreement: Agreement) : many (resolver: User)
+  Answers the designated resolver when one exists, or no rows when the agreement has no resolver or is unknown.
 ```

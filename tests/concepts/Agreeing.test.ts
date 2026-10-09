@@ -66,6 +66,12 @@ describe("Agreeing", () => {
 
     expect(created.agreement).toMatch(/^[0-9a-f-]{36}$/);
     expect(created.version).toMatch(/^[0-9a-f-]{36}$/);
+    await expect(agreeing._get({ agreement: created.agreement })).resolves.toMatchObject([
+      { initiator: "wyatt", counterpart: "alex", status: "PENDING", currentVersion: created.version },
+    ]);
+    await expect(agreeing._version({ version: created.version })).resolves.toMatchObject([
+      { agreement: created.agreement, claim: "Georgia Tech wins by more than seven points" },
+    ]);
     await agreeing.accept({ user: "alex", agreement: created.agreement, version: created.version });
 
     await expect(database.collection("agreeing.agreements").findOne({ _id: created.agreement })).resolves.toMatchObject({
