@@ -71,4 +71,9 @@ export class AuthenticatingConcept {
     if (result.deletedCount === 0) throw new UnknownSession("This session is not active.");
     return {};
   }
+
+  async _byUsername({ username }: { username: string }) {
+    const account = await this.users.findOne({ username });
+    return account === null ? [] : [{ user: account._id }];
+  }
 }

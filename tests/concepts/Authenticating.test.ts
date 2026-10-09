@@ -41,6 +41,8 @@ describe("Authenticating", () => {
     const { user } = await authenticating.register({ username: "wyatt", password: "safe password" });
 
     expect(user).toMatch(/^[0-9a-f-]{36}$/);
+    await expect(authenticating._byUsername({ username: "wyatt" })).resolves.toEqual([{ user }]);
+    await expect(authenticating._byUsername({ username: "unknown" })).resolves.toEqual([]);
     const saved = await database.collection("authenticating.users").findOne({ _id: user });
     expect(saved?.passwordVerifier).not.toBe("safe password");
 

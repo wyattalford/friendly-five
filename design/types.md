@@ -8,4 +8,7 @@ concept instances will be added as their implementations are completed.
 
 ```instances
 instantiate Authenticating
+
+instantiate Agreeing with
+  User is Authenticating.User
 ```

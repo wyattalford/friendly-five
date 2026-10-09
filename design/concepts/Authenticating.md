@@ -74,4 +74,6 @@ signOut(session: Session) : returns ()
 ## Queries
 
 ```queries
+_byUsername(username: String) : optional (user: User)
+  Answers the user with this username, or no row when the username is unknown.
 ```
