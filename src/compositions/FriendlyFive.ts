@@ -459,6 +459,81 @@ const GetObligation = endpoint(
   { input: { required: ["session", "obligation"] } },
 );
 
+const GetObligationForAgreement = endpoint(
+  "/obligations/by-agreement",
+  ({ session, agreement, user, obligation, owing, recipient, description, status }) =>
+    receive({ session, agreement })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(
+          ObligationTracking._byItem({ item: agreement }).is({ obligation }),
+          ObligationTracking._canView({ obligation, user }).is({ obligation }),
+          ObligationTracking._get({ obligation }).is({ owing, recipient, description, status }),
+        )
+          .then(respond({ obligation, agreement, owing, recipient, description, status }))
+          .named("authorized"),
+        where(
+          ObligationTracking._byItem({ item: agreement }).is({ obligation }),
+          no(ObligationTracking._canView({ obligation, user }).is({ obligation })),
+        )
+          .then(respond({ error: "OBLIGATION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(ObligationTracking._byItem({ item: agreement })))
+          .then(respond({ error: "OBLIGATION_NOT_FOUND" }))
+          .named("missing"),
+      ),
+  { input: { required: ["session", "agreement"] } },
+);
+
+const GetCurrentCompletion = endpoint(
+  "/obligations/current",
+  ({ session, obligation, user, report, evidence, reportedAt, disputeEvidence }) =>
+    receive({ session, obligation })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(
+          ObligationTracking._canView({ obligation, user }).is({ obligation }),
+          ObligationTracking._get({ obligation }).is({ status: "DISPUTED" }),
+          ObligationTracking._current({ obligation }).is({ report, evidence, reportedAt, disputeEvidence }),
+        )
+          .then(respond({ obligation, report, evidence, reportedAt, disputeEvidence }))
+          .named("disputed-with-evidence"),
+        where(
+          ObligationTracking._canView({ obligation, user }).is({ obligation }),
+          ObligationTracking._get({ obligation }).is({ status: "DISPUTED" }),
+          ObligationTracking._current({ obligation }).is({ report, reportedAt, disputeEvidence }),
+          no(ObligationTracking._hasEvidence({ report }).is({ report })),
+        )
+          .then(respond({ obligation, report, reportedAt, disputeEvidence }))
+          .named("disputed-without-evidence"),
+        where(
+          ObligationTracking._canView({ obligation, user }).is({ obligation }),
+          ObligationTracking._current({ obligation }).is({ report, evidence, reportedAt }),
+          no(ObligationTracking._get({ obligation }).is({ status: "DISPUTED" })),
+        )
+          .then(respond({ obligation, report, evidence, reportedAt }))
+          .named("with-evidence"),
+        where(
+          ObligationTracking._canView({ obligation, user }).is({ obligation }),
+          ObligationTracking._current({ obligation }).is({ report, reportedAt }),
+          no(ObligationTracking._hasEvidence({ report }).is({ report })),
+          no(ObligationTracking._get({ obligation }).is({ status: "DISPUTED" })),
+        )
+          .then(respond({ obligation, report, reportedAt }))
+          .named("without-evidence"),
+        where(
+          ObligationTracking._get({ obligation }),
+          no(ObligationTracking._canView({ obligation, user }).is({ obligation })),
+        )
+          .then(respond({ error: "OBLIGATION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(ObligationTracking._get({ obligation })))
+          .then(respond({ error: "OBLIGATION_NOT_FOUND" }))
+          .named("missing"),
+      ),
+  { input: { required: ["session", "obligation"] } },
+);
+
 const ReportCompletion = endpoint(
   "/obligations/report",
   ({ session, obligation, evidence, user, report }) =>
@@ -551,5 +626,5 @@ export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
   Agreements: { Propose, Get, GetInvitation, RevokeInvitation, Accept },
   Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
-  Obligations: { GetObligation, ReportCompletion, ConfirmReceipt, DisputeReceipt },
+  Obligations: { GetObligation, GetObligationForAgreement, GetCurrentCompletion, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

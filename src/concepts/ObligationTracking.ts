@@ -211,6 +211,25 @@ export class ObligationTrackingConcept {
         return {};
     }
 
+    async _byItem({ item }: { item: string }) {
+        const record = await this.obligations.findOne({ item });
+        return record === null ? [] : [{ obligation: record._id }];
+    }
+
+    async _canView({
+        obligation: obligationId,
+        user,
+    }: {
+        obligation: string;
+        user: string;
+    }) {
+        const record = await this.obligations.findOne({
+            _id: obligationId,
+            $or: [{ owing: user }, { recipient: user }],
+        });
+        return record === null ? [] : [{ obligation: record._id }];
+    }
+
     async _get({ obligation: obligationId }: { obligation: string }) {
         const record = await this.obligations.findOne({ _id: obligationId });
         if (record === null) return [];
@@ -229,5 +248,32 @@ export class ObligationTrackingConcept {
                     : { confirmedAt: record.confirmedAt }),
             },
         ];
+    }
+
+    async _current({ obligation: obligationId }: { obligation: string }) {
+        const obligation = await this.obligations.findOne({ _id: obligationId });
+        if (obligation?.currentReport === undefined) return [];
+        const report = await this.reports.findOne({ _id: obligation.currentReport });
+        if (report === null) return [];
+        return [
+            {
+                report: report._id,
+                ...(report.evidence === undefined
+                    ? {}
+                    : { evidence: report.evidence }),
+                reportedAt: report.reportedAt,
+                ...(report.disputeEvidence === undefined
+                    ? {}
+                    : { disputeEvidence: report.disputeEvidence }),
+            },
+        ];
+    }
+
+    async _hasEvidence({ report }: { report: string }) {
+        const record = await this.reports.findOne({
+            _id: report,
+            evidence: { $exists: true, $ne: '' },
+        });
+        return record === null ? [] : [{ report: record._id }];
     }
 }

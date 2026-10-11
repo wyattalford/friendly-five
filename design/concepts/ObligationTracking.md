@@ -111,6 +111,18 @@ disputeReceipt(user: User, obligation: Obligation, report: CompletionReport, evi
 ## Queries
 
 ```queries
+_byItem(item: Item) : optional (obligation: Obligation)
+  returns the obligation for the item when one exists
+
+_canView(obligation: Obligation, user: User) : optional (obligation: Obligation)
+  returns the obligation when user is its owing person or recipient
+
 _get(obligation: Obligation) : optional (item: Item, owing: User, recipient: User, description: String, status: ObligationStatus, currentReport?: CompletionReport, confirmedAt?: DateTime)
   returns the obligation details when the obligation exists
+
+_current(obligation: Obligation) : optional (report: CompletionReport, evidence?: String, reportedAt: DateTime, disputeEvidence?: String)
+  returns the current completion report when the obligation has one
+
+_hasEvidence(report: CompletionReport) : optional (report: CompletionReport)
+  returns the completion report when it exists and has nonblank evidence
 ```

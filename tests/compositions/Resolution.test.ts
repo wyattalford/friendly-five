@@ -44,7 +44,7 @@ describe("agreement resolution boundary", () => {
     await client.close();
   });
 
-  test("carries an authorized dispute through a resolver decision", async () => {
+  test("carries an authorized dispute through resolution and obligation completion", async () => {
     const { application, gateway } = createFriendlyFive(database);
     const handler = createHttpHandler({ application, gateway, policy });
 
@@ -177,13 +177,113 @@ describe("agreement resolution boundary", () => {
     await expect(
       database.collection("resolving.cases").findOne({ _id: caseRecord._id }),
     ).resolves.toMatchObject({ status: "FINAL" });
-    await expect(
-      database.collection("obligationTracking.obligations").findOne({ item: proposal.agreement }),
-    ).resolves.toMatchObject({
+    const obligationRecord = await database
+      .collection("obligationTracking.obligations")
+      .findOne({ item: proposal.agreement });
+    expect(obligationRecord).toMatchObject({
       owing: caseRecord.second,
       recipient: caseRecord.first,
       description: "lunch up to $15",
       status: "DUE",
     });
+    if (obligationRecord === null) throw new Error("Expected the final outcome to record an obligation.");
+
+    const outsiderObligationLookup = await handler(
+      post("/obligations/by-agreement", { agreement: proposal.agreement }, outsiderCookie),
+    );
+    expect(outsiderObligationLookup.status).toBe(403);
+    expect(await outsiderObligationLookup.json()).toEqual({ error: "FORBIDDEN" });
+
+    const resolverObligationLookup = await handler(
+      post("/obligations/by-agreement", { agreement: proposal.agreement }, morganCookie),
+    );
+    expect(resolverObligationLookup.status).toBe(403);
+    expect(await resolverObligationLookup.json()).toEqual({ error: "FORBIDDEN" });
+
+    const owingLookup = await handler(
+      post("/obligations/by-agreement", { agreement: proposal.agreement }, alexCookie),
+    );
+    expect(owingLookup.status).toBe(200);
+    expect(await owingLookup.json()).toMatchObject({
+      obligation: obligationRecord._id,
+      agreement: proposal.agreement,
+      owing: caseRecord.second,
+      recipient: caseRecord.first,
+      description: "lunch up to $15",
+      status: "DUE",
+    });
+
+    const firstCompletion = await handler(
+      post("/obligations/report", { obligation: obligationRecord._id }, alexCookie),
+    );
+    expect(firstCompletion.status).toBe(200);
+    const firstCompletionReport = (await firstCompletion.json()) as { report: string };
+
+    const recipientReview = await handler(
+      post("/obligations/current", { obligation: obligationRecord._id }, wyattCookie),
+    );
+    expect(recipientReview.status).toBe(200);
+    expect(await recipientReview.json()).toMatchObject({
+      obligation: obligationRecord._id,
+      report: firstCompletionReport.report,
+    });
+
+    const completionDispute = await handler(
+      post(
+        "/obligations/dispute",
+        {
+          obligation: obligationRecord._id,
+          report: firstCompletionReport.report,
+          evidence: "Lunch was not delivered.",
+        },
+        wyattCookie,
+      ),
+    );
+    expect(completionDispute.status).toBe(200);
+
+    const owingDisputeReview = await handler(
+      post("/obligations/current", { obligation: obligationRecord._id }, alexCookie),
+    );
+    expect(owingDisputeReview.status).toBe(200);
+    expect(await owingDisputeReview.json()).toMatchObject({
+      report: firstCompletionReport.report,
+      disputeEvidence: "Lunch was not delivered.",
+    });
+
+    const revisedCompletion = await handler(
+      post(
+        "/obligations/report",
+        {
+          obligation: obligationRecord._id,
+          evidence: "Restaurant receipt for the delivered lunch.",
+        },
+        alexCookie,
+      ),
+    );
+    expect(revisedCompletion.status).toBe(200);
+    const revisedCompletionReport = (await revisedCompletion.json()) as { report: string };
+
+    const revisedRecipientReview = await handler(
+      post("/obligations/current", { obligation: obligationRecord._id }, wyattCookie),
+    );
+    expect(revisedRecipientReview.status).toBe(200);
+    expect(await revisedRecipientReview.json()).toMatchObject({
+      report: revisedCompletionReport.report,
+      evidence: "Restaurant receipt for the delivered lunch.",
+    });
+
+    const confirmedReceipt = await handler(
+      post(
+        "/obligations/confirm",
+        { obligation: obligationRecord._id, report: revisedCompletionReport.report },
+        wyattCookie,
+      ),
+    );
+    expect(confirmedReceipt.status).toBe(200);
+    expect(await confirmedReceipt.json()).toEqual({ confirmed: true });
+
+    await expect(
+      database.collection("obligationTracking.obligations").findOne({ _id: obligationRecord._id }),
+    ).resolves.toMatchObject({ status: "COMPLETE", currentReport: revisedCompletionReport.report });
   });
 });

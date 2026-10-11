@@ -58,6 +58,8 @@ FriendlyFive.Outcomes.ConfirmOutcome at /resolutions/confirm
 FriendlyFive.Outcomes.DisputeOutcome at /resolutions/dispute
 FriendlyFive.Outcomes.DecideOutcome at /resolutions/decide
 FriendlyFive.Obligations.GetObligation at /obligations/get
+FriendlyFive.Obligations.GetObligationForAgreement at /obligations/by-agreement
+FriendlyFive.Obligations.GetCurrentCompletion at /obligations/current
 FriendlyFive.Obligations.ReportCompletion at /obligations/report
 FriendlyFive.Obligations.ConfirmReceipt at /obligations/confirm
 FriendlyFive.Obligations.DisputeReceipt at /obligations/dispute
@@ -82,4 +84,4 @@ The resolution endpoints are [case review](reaction:FriendlyFive.Outcomes.GetRes
 The cross-concept link is [accepted agreements open resolution cases](reaction:FriendlyFive.Outcomes.AcceptedAgreementOpensCase).
 Final TRUE decisions are linked to [TRUE-side obligation recording](reaction:FriendlyFive.Outcomes.FinalTrueDecisionRecordsObligation), and final FALSE decisions are linked to [FALSE-side obligation recording](reaction:FriendlyFive.Outcomes.FinalFalseDecisionRecordsObligation). Mutual confirmations use [TRUE confirmation obligation recording](reaction:FriendlyFive.Outcomes.ConfirmedTrueOutcomeRecordsObligation) and [FALSE confirmation obligation recording](reaction:FriendlyFive.Outcomes.ConfirmedFalseOutcomeRecordsObligation).
 
-Obligation fulfillment uses [obligation review](reaction:FriendlyFive.Obligations.GetObligation), [completion reporting](reaction:FriendlyFive.Obligations.ReportCompletion), [receipt confirmation](reaction:FriendlyFive.Obligations.ConfirmReceipt), and [receipt disputes](reaction:FriendlyFive.Obligations.DisputeReceipt).
+Obligation fulfillment uses [obligation review](reaction:FriendlyFive.Obligations.GetObligation), [agreement-based obligation lookup](reaction:FriendlyFive.Obligations.GetObligationForAgreement), [current completion review](reaction:FriendlyFive.Obligations.GetCurrentCompletion), [completion reporting](reaction:FriendlyFive.Obligations.ReportCompletion), [receipt confirmation](reaction:FriendlyFive.Obligations.ConfirmReceipt), and [receipt disputes](reaction:FriendlyFive.Obligations.DisputeReceipt).

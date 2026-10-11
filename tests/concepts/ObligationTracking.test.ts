@@ -26,7 +26,12 @@ describe("ObligationTracking", () => {
   test("records, reports, and confirms an obligation", async () => {
     const tracking = new ObligationTrackingConcept(database);
     const created = await tracking.record({ item: "agreement-true", owing: "alex", recipient: "wyatt", description: "lunch" });
+    await expect(tracking._byItem({ item: "agreement-true" })).resolves.toEqual([{ obligation: created.obligation }]);
+    await expect(tracking._canView({ obligation: created.obligation, user: "alex" })).resolves.toEqual([{ obligation: created.obligation }]);
+    await expect(tracking._canView({ obligation: created.obligation, user: "casey" })).resolves.toEqual([]);
     const report = await tracking.reportCompletion({ user: "alex", obligation: created.obligation });
+    await expect(tracking._current({ obligation: created.obligation })).resolves.toMatchObject([{ report: report.report }]);
+    await expect(tracking._hasEvidence({ report: report.report })).resolves.toEqual([]);
     await tracking.confirmReceipt({ user: "wyatt", obligation: created.obligation, report: report.report });
     await expect(tracking._get({ obligation: created.obligation })).resolves.toMatchObject([{ status: "COMPLETE", currentReport: report.report }]);
   });
@@ -39,5 +44,8 @@ describe("ObligationTracking", () => {
     await expect(tracking.disputeReceipt({ user: "alex", obligation: created.obligation, report: report.report, evidence: "" })).rejects.toThrow(ReceiptDisputeEvidenceRequired);
     await tracking.disputeReceipt({ user: "alex", obligation: created.obligation, report: report.report, evidence: "The item was not delivered." });
     await expect(tracking._get({ obligation: created.obligation })).resolves.toMatchObject([{ status: "DISPUTED" }]);
+    await expect(tracking._current({ obligation: created.obligation })).resolves.toMatchObject([{ report: report.report, disputeEvidence: "The item was not delivered." }]);
+    const revised = await tracking.reportCompletion({ user: "wyatt", obligation: created.obligation, evidence: "Delivery receipt" });
+    await expect(tracking._hasEvidence({ report: revised.report })).resolves.toEqual([{ report: revised.report }]);
   });
 });

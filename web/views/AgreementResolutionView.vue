@@ -10,6 +10,10 @@ type ResolutionResult = Awaited<ReturnType<typeof api.resolutions["by-agreement"
 type ResolutionDetails = Exclude<ResolutionResult, { error: unknown }>;
 type ReportResult = Awaited<ReturnType<typeof api.resolutions.current>>;
 type ReportDetails = Exclude<ReportResult, { error: unknown }>;
+type ObligationResult = Awaited<ReturnType<typeof api.obligations["by-agreement"]>>;
+type ObligationDetails = Exclude<ObligationResult, { error: unknown }>;
+type CompletionResult = Awaited<ReturnType<typeof api.obligations.current>>;
+type CompletionDetails = Exclude<CompletionResult, { error: unknown }>;
 
 const route = useRoute();
 const currentUserId = inject<Readonly<Ref<string>>>("currentUserId");
@@ -18,6 +22,8 @@ if (currentUserId === undefined) throw new Error("Resolution view requires authe
 const agreement = ref<AgreementDetails | null>(null);
 const resolution = ref<ResolutionDetails | null>(null);
 const currentReport = ref<ReportDetails | null>(null);
+const obligation = ref<ObligationDetails | null>(null);
+const currentCompletion = ref<CompletionDetails | null>(null);
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref("");
@@ -27,6 +33,8 @@ const reportEvidence = ref("");
 const disputeReason = ref("");
 const decisionOutcome = ref<Outcome>("TRUE");
 const decisionEvidence = ref("");
+const completionEvidence = ref("");
+const completionDisputeEvidence = ref("");
 
 const agreementId = computed(() => String(route.params.agreement ?? ""));
 const isParticipant = computed(
@@ -59,6 +67,23 @@ const canReviewReport = computed(
 );
 const canDecide = computed(
   () => isResolver.value && resolution.value?.status === "DISPUTED",
+);
+const isOwing = computed(
+  () => obligation.value !== null && obligation.value.owing === currentUserId.value,
+);
+const isRecipient = computed(
+  () => obligation.value !== null && obligation.value.recipient === currentUserId.value,
+);
+const canReportCompletion = computed(
+  () =>
+    isOwing.value &&
+    (obligation.value?.status === "DUE" || obligation.value?.status === "DISPUTED"),
+);
+const canReviewCompletion = computed(
+  () =>
+    isRecipient.value &&
+    obligation.value?.status === "REPORTED" &&
+    currentCompletion.value !== null,
 );
 
 function formatDate(value: string): string {
@@ -94,6 +119,50 @@ function requestError(code: string): string {
   return "FriendlyFive could not complete that action. Try again.";
 }
 
+function obligationRequestError(code: string): string {
+  if (code === "FORBIDDEN") return "You are not authorized to use this obligation.";
+  if (code === "NOT_FOUND") return "The obligation could not be found.";
+  return requestError(code);
+}
+
+async function loadObligation(): Promise<void> {
+  if (
+    resolution.value?.status !== "FINAL" ||
+    currentReport.value?.outcome === "VOID" ||
+    !isParticipant.value
+  ) {
+    obligation.value = null;
+    currentCompletion.value = null;
+    return;
+  }
+
+  const obligationResult = await api.obligations["by-agreement"]({
+    agreement: agreementId.value,
+  });
+  if ("error" in obligationResult) {
+    obligation.value = null;
+    currentCompletion.value = null;
+    error.value = obligationRequestError(obligationResult.error);
+    return;
+  }
+  obligation.value = obligationResult;
+
+  if (obligationResult.status === "DUE") {
+    currentCompletion.value = null;
+    return;
+  }
+
+  const completionResult = await api.obligations.current({
+    obligation: obligationResult.obligation,
+  });
+  if ("error" in completionResult) {
+    currentCompletion.value = null;
+    error.value = obligationRequestError(completionResult.error);
+    return;
+  }
+  currentCompletion.value = completionResult;
+}
+
 async function loadPage(showLoading = true): Promise<void> {
   if (showLoading) loading.value = true;
   error.value = "";
@@ -103,6 +172,8 @@ async function loadPage(showLoading = true): Promise<void> {
       agreement.value = null;
       resolution.value = null;
       currentReport.value = null;
+      obligation.value = null;
+      currentCompletion.value = null;
       error.value = requestError(agreementResult.error);
       return;
     }
@@ -114,6 +185,8 @@ async function loadPage(showLoading = true): Promise<void> {
     if ("error" in resolutionResult) {
       resolution.value = null;
       currentReport.value = null;
+      obligation.value = null;
+      currentCompletion.value = null;
       error.value = requestError(resolutionResult.error);
       return;
     }
@@ -121,6 +194,8 @@ async function loadPage(showLoading = true): Promise<void> {
 
     if (resolutionResult.status === "OPEN") {
       currentReport.value = null;
+      obligation.value = null;
+      currentCompletion.value = null;
       return;
     }
 
@@ -131,6 +206,7 @@ async function loadPage(showLoading = true): Promise<void> {
       return;
     }
     currentReport.value = reportResult;
+    await loadObligation();
   } catch {
     error.value = "FriendlyFive could not load this resolution case. Try again.";
   } finally {
@@ -246,6 +322,85 @@ async function decideOutcome(): Promise<void> {
     notice.value = "Resolver decision recorded. The resolution is final.";
   } catch {
     error.value = "FriendlyFive could not record the decision. Try again.";
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function reportCompletion(): Promise<void> {
+  if (obligation.value === null) return;
+  submitting.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    const evidence = completionEvidence.value.trim();
+    const result = await api.obligations.report({
+      obligation: obligation.value.obligation,
+      ...(evidence === "" ? {} : { evidence }),
+    });
+    if ("error" in result) {
+      error.value = obligationRequestError(result.error);
+      return;
+    }
+    completionEvidence.value = "";
+    await loadPage(false);
+    notice.value = "Completion reported. The recipient can now confirm or dispute it.";
+  } catch {
+    error.value = "FriendlyFive could not report completion. Try again.";
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function confirmCompletion(): Promise<void> {
+  if (obligation.value === null || currentCompletion.value === null) return;
+  submitting.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    const result = await api.obligations.confirm({
+      obligation: obligation.value.obligation,
+      report: currentCompletion.value.report,
+    });
+    if ("error" in result) {
+      error.value = obligationRequestError(result.error);
+      return;
+    }
+    await loadPage(false);
+    notice.value = "Receipt confirmed. The obligation is complete.";
+  } catch {
+    error.value = "FriendlyFive could not confirm receipt. Try again.";
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function disputeCompletion(): Promise<void> {
+  if (obligation.value === null || currentCompletion.value === null) return;
+  const evidence = completionDisputeEvidence.value.trim();
+  if (evidence === "") {
+    error.value = "Explain why the obligation is not complete.";
+    return;
+  }
+
+  submitting.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    const result = await api.obligations.dispute({
+      obligation: obligation.value.obligation,
+      report: currentCompletion.value.report,
+      evidence,
+    });
+    if ("error" in result) {
+      error.value = obligationRequestError(result.error);
+      return;
+    }
+    completionDisputeEvidence.value = "";
+    await loadPage(false);
+    notice.value = "Completion disputed. The owing participant can submit a revised report.";
+  } catch {
+    error.value = "FriendlyFive could not dispute completion. Try again.";
   } finally {
     submitting.value = false;
   }
@@ -402,6 +557,102 @@ watch(agreementId, () => loadPage());
         <h2>This outcome is final</h2>
         <p v-if="currentReport?.outcome === 'VOID'">No obligation was created.</p>
         <p v-else>The applicable stake has been recorded as an obligation.</p>
+      </section>
+
+      <section v-if="obligation" class="obligation-card">
+        <div class="obligation-header">
+          <div>
+            <p class="eyebrow">Settlement</p>
+            <h2>{{ usernameFor(obligation.owing) }} owes {{ usernameFor(obligation.recipient) }}</h2>
+          </div>
+          <span class="status-badge" :class="`status-${obligation.status.toLowerCase()}`">
+            {{ obligation.status }}
+          </span>
+        </div>
+
+        <p class="obligation-description">{{ obligation.description }}</p>
+        <p class="field-help">
+          FriendlyFive records whether the obligation was completed. The participants handle the stake outside the app.
+        </p>
+
+        <div v-if="currentCompletion" class="completion-report">
+          <strong>Current completion report</strong>
+          <p>Reported on {{ formatDate(currentCompletion.reportedAt) }}</p>
+          <div v-if="'evidence' in currentCompletion" class="evidence-block">
+            <strong>Evidence or explanation</strong>
+            <p>{{ currentCompletion.evidence }}</p>
+          </div>
+          <div v-if="'disputeEvidence' in currentCompletion" class="dispute-block">
+            <strong>Recipient's dispute</strong>
+            <p>{{ currentCompletion.disputeEvidence }}</p>
+          </div>
+        </div>
+
+        <form
+          v-if="canReportCompletion"
+          class="resolution-form fulfillment-form"
+          @submit.prevent="reportCompletion"
+        >
+          <h3>
+            {{ obligation.status === "DISPUTED" ? "Submit a revised completion report" : "Report completion" }}
+          </h3>
+          <p>
+            {{ obligation.status === "DISPUTED"
+              ? "Respond to the recipient's concern after completing the obligation."
+              : "Report after you have completed the obligation." }}
+          </p>
+          <label for="completion-evidence">Evidence or explanation <span>optional</span></label>
+          <textarea
+            id="completion-evidence"
+            v-model="completionEvidence"
+            rows="3"
+            :disabled="submitting"
+          ></textarea>
+          <button class="button button-primary" type="submit" :disabled="submitting">
+            {{ submitting ? "Submitting…" : "Report completion" }}
+          </button>
+        </form>
+
+        <section v-else-if="obligation.status === 'DUE' && isRecipient" class="fulfillment-state">
+          <h3>Waiting for completion</h3>
+          <p>{{ usernameFor(obligation.owing) }} can report when the obligation has been completed.</p>
+        </section>
+
+        <section v-if="canReviewCompletion" class="fulfillment-state">
+          <h3>Review the completion report</h3>
+          <p>Confirm if you received the stake. If it is incomplete, explain the problem.</p>
+          <button class="button button-primary" type="button" :disabled="submitting" @click="confirmCompletion">
+            {{ submitting ? "Saving…" : "Confirm receipt" }}
+          </button>
+          <form class="resolution-form dispute-form" @submit.prevent="disputeCompletion">
+            <label for="completion-dispute-evidence">Why is the obligation not complete?</label>
+            <textarea
+              id="completion-dispute-evidence"
+              v-model="completionDisputeEvidence"
+              required
+              rows="3"
+              :disabled="submitting"
+            ></textarea>
+            <button class="button button-danger" type="submit" :disabled="submitting">
+              {{ submitting ? "Saving…" : "Dispute completion" }}
+            </button>
+          </form>
+        </section>
+
+        <section v-else-if="obligation.status === 'REPORTED' && isOwing" class="fulfillment-state">
+          <h3>Waiting for the recipient</h3>
+          <p>They can confirm receipt or dispute this completion report.</p>
+        </section>
+
+        <section v-if="obligation.status === 'DISPUTED' && isRecipient" class="fulfillment-state">
+          <h3>Completion is disputed</h3>
+          <p>{{ usernameFor(obligation.owing) }} can complete the obligation and submit a revised report.</p>
+        </section>
+
+        <section v-if="obligation.status === 'COMPLETE'" class="fulfillment-state completion-complete">
+          <h3>Obligation complete</h3>
+          <p>{{ usernameFor(obligation.recipient) }} confirmed receipt.</p>
+        </section>
       </section>
     </template>
   </section>

@@ -317,7 +317,8 @@ h1 {
 .acceptance-card,
 .invitation-box,
 .report-card,
-.action-card {
+.action-card,
+.obligation-card {
   border: 1px solid #d7d1c4;
   border-radius: 1rem;
   background: #fffdf8;
@@ -629,6 +630,77 @@ h1 {
   background: #f5fbf6;
 }
 
+.obligation-card {
+  margin-top: 1rem;
+  padding: clamp(1.2rem, 3vw, 2rem);
+}
+
+.obligation-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.obligation-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.obligation-description {
+  margin-bottom: 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.completion-report,
+.fulfillment-form,
+.fulfillment-state {
+  margin-top: 1.25rem;
+  border-top: 1px solid #ded8cc;
+  padding-top: 1.25rem;
+}
+
+.completion-report > p,
+.fulfillment-form > p,
+.fulfillment-state > p {
+  line-height: 1.55;
+}
+
+.completion-report > p {
+  margin: 0.35rem 0 0;
+  color: #68736c;
+}
+
+.fulfillment-form h3,
+.fulfillment-state h3 {
+  margin: 0;
+}
+
+.fulfillment-state > .button {
+  width: fit-content;
+  margin-top: 0.5rem;
+}
+
+.completion-complete {
+  color: #285d3e;
+}
+
+.status-due {
+  color: #315c82;
+  background: #e1edf7;
+}
+
+.status-reported {
+  color: #74500e;
+  background: #f7e8bb;
+}
+
+.status-complete {
+  color: #285d3e;
+  background: #dceadf;
+}
+
 @media (max-width: 760px) {
   .auth-layout {
     grid-template-columns: 1fr;
@@ -646,6 +718,7 @@ h1 {
   }
 
   .agreement-header,
+  .obligation-header,
   .copy-row {
     align-items: stretch;
     flex-direction: column;
