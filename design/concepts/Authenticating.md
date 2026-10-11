@@ -24,6 +24,7 @@ a set of Users with
 
 a set of Sessions with
   a user User
+  an expiresAt DateTime
 
 Rule: Session identifiers are virtually unguessable, and password verifiers do not store plaintext passwords.
 ```
@@ -43,18 +44,20 @@ register(username: String, password: String) : returns (user: User)
     add a new user with username and a verifier securely derived from password
     returns user
 
-signIn(username: String, password: String) : returns (session: Session)
+signIn(username: String, password: String) : returns (session: Session, expiresAt: DateTime)
   where no user has the given username or password does not match that user's passwordVerifier
   then
     refuses INVALID_CREDENTIALS "The username or password is incorrect."
   where a user has the given username, and password matches that user's passwordVerifier
   then
-    add a new session with user set to the verified user
-    returns session
+    delete every expired session
+    add a new session with user set to the verified user and expiresAt set to 30 minutes from now
+    returns session, expiresAt
 
 authenticate(session: Session) : returns (user: User)
-  where session does not exist
+  where session does not exist or is expired
   then
+    delete the session if it is expired
     refuses UNKNOWN_SESSION "This session is not active."
   where session exists
   then
@@ -62,8 +65,9 @@ authenticate(session: Session) : returns (user: User)
     returns user
 
 signOut(session: Session) : returns ()
-  where session does not exist
+  where session does not exist or is expired
   then
+    delete the session if it is expired
     refuses UNKNOWN_SESSION "This session is not active."
   where session exists
   then
@@ -76,4 +80,7 @@ signOut(session: Session) : returns ()
 ```queries
 _byUsername(username: String) : optional (user: User)
   Answers the user with this username, or no row when the username is unknown.
+
+_username(user: User) : optional (username: String)
+  Answers the username for this user, or no row when the user is unknown.
 ```

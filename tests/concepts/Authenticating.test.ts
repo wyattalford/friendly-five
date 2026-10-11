@@ -37,7 +37,8 @@ describe("Authenticating", () => {
   });
 
   test("registers, signs in, authenticates, and signs out", async () => {
-    const authenticating = new AuthenticatingConcept(database);
+    const now = new Date("2026-10-11T12:00:00.000Z");
+    const authenticating = new AuthenticatingConcept(database, () => now);
     const { user } = await authenticating.register({ username: "wyatt", password: "safe password" });
 
     expect(user).toMatch(/^[0-9a-f-]{36}$/);
@@ -46,10 +47,24 @@ describe("Authenticating", () => {
     const saved = await database.collection("authenticating.users").findOne({ _id: user });
     expect(saved?.passwordVerifier).not.toBe("safe password");
 
-    const { session } = await authenticating.signIn({ username: "wyatt", password: "safe password" });
+    await expect(authenticating._username({ user })).resolves.toEqual([{ username: "wyatt" }]);
+    await expect(authenticating._username({ user: "unknown" })).resolves.toEqual([]);
+    const { session, expiresAt } = await authenticating.signIn({ username: "wyatt", password: "safe password" });
+    expect(expiresAt).toEqual(new Date("2026-10-11T12:30:00.000Z"));
     await expect(authenticating.authenticate({ session })).resolves.toEqual({ user });
     await expect(authenticating.signOut({ session })).resolves.toEqual({});
     await expect(authenticating.authenticate({ session })).rejects.toThrow(UnknownSession);
+  });
+
+  test("expires sessions after thirty minutes", async () => {
+    let now = new Date("2026-10-11T12:00:00.000Z");
+    const authenticating = new AuthenticatingConcept(database, () => now);
+    await authenticating.register({ username: "morgan", password: "safe password" });
+    const { session } = await authenticating.signIn({ username: "morgan", password: "safe password" });
+
+    now = new Date("2026-10-11T12:30:00.000Z");
+    await expect(authenticating.authenticate({ session })).rejects.toThrow(UnknownSession);
+    await expect(database.collection("authenticating.sessions").findOne({ _id: session })).resolves.toBeNull();
   });
 
   test("refuses blank credentials, duplicate usernames, and incorrect credentials", async () => {

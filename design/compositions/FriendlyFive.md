@@ -9,8 +9,12 @@ The application authorizes each domain action from roles owned by the relevant
 concept. It never accepts a user identifier supplied by the browser as proof of
 who is acting.
 
-The account setup endpoints are [registration](reaction:FriendlyFive.Accounts.Register)
-and [sign-in](reaction:FriendlyFive.Accounts.SignIn). The proposal flow resolves
+The account endpoints are [registration](reaction:FriendlyFive.Accounts.Register),
+[sign-in](reaction:FriendlyFive.Accounts.SignIn), and
+[current-user lookup](reaction:FriendlyFive.Accounts.CurrentUser), and
+[sign-out](reaction:FriendlyFive.Accounts.SignOut). Browser requests carry the
+session in a secure HTTP-only cookie, while the logical endpoints still require
+the session so authentication remains application behavior. The proposal flow resolves
 counterpart and resolver usernames before invoking [Agreeing.propose](reaction:FriendlyFive.Agreements.Propose).
 Participants and an agreed resolver can read the accepted terms through [agreement review](reaction:FriendlyFive.Agreements.Get),
 and the counterpart accepts through [agreement acceptance](reaction:FriendlyFive.Agreements.Accept).
@@ -28,6 +32,8 @@ outcome themselves.
 ```endpoints
 FriendlyFive.Accounts.Register at /auth/register
 FriendlyFive.Accounts.SignIn at /auth/sign-in
+FriendlyFive.Accounts.CurrentUser at /auth/current
+FriendlyFive.Accounts.SignOut at /auth/sign-out
 FriendlyFive.Agreements.Propose at /agreements/propose
 FriendlyFive.Agreements.Get at /agreements/get
 FriendlyFive.Agreements.Accept at /agreements/accept

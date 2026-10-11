@@ -15,11 +15,29 @@ const Register = endpoint(
 
 const SignIn = endpoint(
   "/auth/sign-in",
-  ({ username, password, session }) =>
+  ({ username, password, session, expiresAt }) =>
     receive({ username, password })
-      .then(Authenticating.signIn({ username, password }).responds({ session }))
-      .then(respond({ session })),
+      .then(Authenticating.signIn({ username, password }).responds({ session, expiresAt }))
+      .then(respond({ session, expiresAt })),
   { input: { required: ["username", "password"] } },
+);
+
+const CurrentUser = endpoint(
+  "/auth/current",
+  ({ session, user, username }) =>
+    receive({ session })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(where(Authenticating._username({ user }).is({ username })).then(respond({ username }))),
+  { input: { required: ["session"] } },
+);
+
+const SignOut = endpoint(
+  "/auth/sign-out",
+  ({ session }) =>
+    receive({ session })
+      .then(Authenticating.signOut({ session }).responds({}))
+      .then(respond({ signedOut: true })),
+  { input: { required: ["session"] } },
 );
 
 const Propose = endpoint(
@@ -449,7 +467,7 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 );
 
 export const composition = {
-  Accounts: { Register, SignIn },
+  Accounts: { Register, SignIn, CurrentUser, SignOut },
   Agreements: { Propose, Get, Accept },
   Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
   Obligations: { GetObligation, ReportCompletion, ConfirmReceipt, DisputeReceipt },

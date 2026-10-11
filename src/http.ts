@@ -1,6 +1,7 @@
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 
 export const policy = httpPolicy({
+  publicOrigin: process.env.PUBLIC_ORIGIN ?? "http://127.0.0.1:5173",
   basePath: "/api",
   publicErrors: {
     INVALID_CREDENTIALS: "INVALID_REQUEST",
@@ -44,5 +45,13 @@ export const policy = httpPolicy({
     RECEIPT_DISPUTE_NOT_CURRENT: "INVALID_REQUEST",
     RECEIPT_DISPUTE_NOT_RECIPIENT: "FORBIDDEN",
     RECEIPT_DISPUTE_EVIDENCE_REQUIRED: "INVALID_REQUEST",
+  },
+  cookies: {
+    session: {
+      name: "friendlyfive-session",
+      input: "session",
+      issue: [{ path: "/auth/sign-in", value: "session", expires: "expiresAt" }],
+      clear: ["/auth/sign-out"],
+    },
   },
 });
