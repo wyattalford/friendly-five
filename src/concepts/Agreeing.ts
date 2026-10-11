@@ -265,4 +265,13 @@ export class AgreeingConcept {
     const version = await this.versions.findOne({ _id: record.currentVersion });
     return version?.resolver === undefined ? [] : [{ resolver: version.resolver }];
   }
+
+  async _canView({ agreement, user }: { agreement: string; user: string }) {
+    const record = await this.agreements.findOne({ _id: agreement });
+    if (record === null) return [];
+    if (user === record.initiator || user === record.counterpart) return [{ agreement: record._id }];
+    if (record.status !== "ACCEPTED") return [];
+    const version = await this.versions.findOne({ _id: record.currentVersion });
+    return version?.resolver === user ? [{ agreement: record._id }] : [];
+  }
 }

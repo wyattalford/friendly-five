@@ -158,4 +158,6 @@ _version(version: Version) : optional (agreement: Agreement, number: Number, aut
   Answers immutable version terms, or no row when the version is unknown.
 _designatedResolver(agreement: Agreement) : many (resolver: User)
   Answers the designated resolver when one exists, or no rows when the agreement has no resolver or is unknown.
+_canView(agreement: Agreement, user: User) : optional (agreement: Agreement)
+  Answers one authorized row when user is a participant, or when the agreement is ACCEPTED and user is its designated resolver. Answers no row otherwise, including for an unknown agreement.
 ```

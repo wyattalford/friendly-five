@@ -6,6 +6,7 @@ import { db } from "./db.ts";
 import { composition } from "./compositions/FriendlyFive.ts";
 import { ResolvingConcept } from "./concepts/Resolving.ts";
 import { ObligationTrackingConcept } from "./concepts/ObligationTracking.ts";
+import { LinkingConcept } from "./concepts/Linking.ts";
 import type { Db } from "mongodb";
 
 export function assembleApplication(database: Db = db) {
@@ -14,6 +15,7 @@ export function assembleApplication(database: Db = db) {
     instances: {
       Authenticating: new AuthenticatingConcept(database),
       Agreeing: new AgreeingConcept(database),
+      Linking: new LinkingConcept(database),
       Resolving: new ResolvingConcept(database),
       ObligationTracking: new ObligationTrackingConcept(database),
     },

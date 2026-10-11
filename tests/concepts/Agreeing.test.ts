@@ -115,4 +115,31 @@ describe("Agreeing", () => {
       ProposalSameParticipant,
     );
   });
+
+  test("limits agreement views to participants and the resolver after acceptance", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const created = await agreeing.propose(proposal());
+
+    await expect(
+      agreeing._canView({ agreement: created.agreement, user: "wyatt" }),
+    ).resolves.toEqual([{ agreement: created.agreement }]);
+    await expect(
+      agreeing._canView({ agreement: created.agreement, user: "alex" }),
+    ).resolves.toEqual([{ agreement: created.agreement }]);
+    await expect(
+      agreeing._canView({ agreement: created.agreement, user: "morgan" }),
+    ).resolves.toEqual([]);
+    await expect(
+      agreeing._canView({ agreement: created.agreement, user: "casey" }),
+    ).resolves.toEqual([]);
+
+    await agreeing.accept({
+      user: "alex",
+      agreement: created.agreement,
+      version: created.version,
+    });
+    await expect(
+      agreeing._canView({ agreement: created.agreement, user: "morgan" }),
+    ).resolves.toEqual([{ agreement: created.agreement }]);
+  });
 });

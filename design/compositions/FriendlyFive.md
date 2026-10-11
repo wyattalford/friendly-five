@@ -14,10 +14,20 @@ The account endpoints are [registration](reaction:FriendlyFive.Accounts.Register
 [current-user lookup](reaction:FriendlyFive.Accounts.CurrentUser), and
 [sign-out](reaction:FriendlyFive.Accounts.SignOut). Browser requests carry the
 session in a secure HTTP-only cookie, while the logical endpoints still require
-the session so authentication remains application behavior. The proposal flow resolves
-counterpart and resolver usernames before invoking [Agreeing.propose](reaction:FriendlyFive.Agreements.Propose).
-Participants and an agreed resolver can read the accepted terms through [agreement review](reaction:FriendlyFive.Agreements.Get),
-and the counterpart accepts through [agreement acceptance](reaction:FriendlyFive.Agreements.Accept).
+the session so authentication remains application behavior. The proposal flow
+resolves counterpart and resolver usernames before invoking
+[Agreeing.propose](reaction:FriendlyFive.Agreements.Propose), then creates an
+active Linking reference owned by the initiator and returns its opaque token.
+A supplied nonblank resolver username must identify an account. Participants
+and an agreed resolver can read the accepted terms through
+[agreement review](reaction:FriendlyFive.Agreements.Get). The
+[invitation lookup](reaction:FriendlyFive.Agreements.GetInvitation) resolves
+the token and independently checks the signed-in user's agreement role before
+returning private terms. The
+[invitation revocation](reaction:FriendlyFive.Agreements.RevokeInvitation)
+authenticates the requester before Linking enforces link ownership. The
+counterpart accepts through
+[agreement acceptance](reaction:FriendlyFive.Agreements.Accept).
 
 When the counterpart accepts the current agreement version, the application
 opens one resolution case using the accepted participants, deadline, resolution
@@ -36,6 +46,8 @@ FriendlyFive.Accounts.CurrentUser at /auth/current
 FriendlyFive.Accounts.SignOut at /auth/sign-out
 FriendlyFive.Agreements.Propose at /agreements/propose
 FriendlyFive.Agreements.Get at /agreements/get
+FriendlyFive.Agreements.GetInvitation at /agreements/invite
+FriendlyFive.Agreements.RevokeInvitation at /agreements/invite/revoke
 FriendlyFive.Agreements.Accept at /agreements/accept
 FriendlyFive.Outcomes.GetResolution at /resolutions/get
 FriendlyFive.Outcomes.GetCurrentReport at /resolutions/current
@@ -47,6 +59,14 @@ FriendlyFive.Obligations.GetObligation at /obligations/get
 FriendlyFive.Obligations.ReportCompletion at /obligations/report
 FriendlyFive.Obligations.ConfirmReceipt at /obligations/confirm
 FriendlyFive.Obligations.DisputeReceipt at /obligations/dispute
+```
+
+```computations
+Blank(value: String) : Boolean
+  Reports whether an optional username contains no non-whitespace characters.
+
+NonBlank(value: String) : Boolean
+  Reports whether an optional username contains at least one non-whitespace character.
 ```
 
 The resolution endpoints are [case review](reaction:FriendlyFive.Outcomes.GetResolution),

@@ -1,8 +1,8 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { no, reaction, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concepts.ts";
+import { computations, concepts } from "../concepts.ts";
 
-const { Agreeing, Authenticating, Resolving, ObligationTracking } = concepts;
+const { Agreeing, Authenticating, Linking, Resolving, ObligationTracking } = concepts;
 
 const Register = endpoint(
   "/auth/register",
@@ -57,6 +57,8 @@ const Propose = endpoint(
     resolver,
     agreement,
     version,
+    link,
+    token,
   }) =>
     receive({
       session,
@@ -89,11 +91,13 @@ const Propose = endpoint(
             resolver,
           }).responds({ agreement, version }),
         )
-        .then(respond({ agreement, version }))
+        .then(Linking.create({ owner: initiator, item: agreement }).responds({ link, token }))
+        .then(respond({ agreement, version, link, token }))
         .named("resolver-found"),
       where(
         Authenticating._byUsername({ username: counterpartUsername }).is({ user: counterpart }),
         no(Authenticating._byUsername({ username: resolverUsername ?? "" })),
+        computations.Blank({ value: resolverUsername ?? "" }),
       )
         .then(
           Agreeing.propose({
@@ -107,8 +111,16 @@ const Propose = endpoint(
             resolutionRule,
           }).responds({ agreement, version }),
         )
-        .then(respond({ agreement, version }))
+        .then(Linking.create({ owner: initiator, item: agreement }).responds({ link, token }))
+        .then(respond({ agreement, version, link, token }))
         .named("resolver-omitted"),
+      where(
+        Authenticating._byUsername({ username: counterpartUsername }),
+        no(Authenticating._byUsername({ username: resolverUsername ?? "" })),
+        computations.NonBlank({ value: resolverUsername ?? "" }),
+      )
+        .then(respond({ error: "RESOLVER_NOT_FOUND" }))
+        .named("resolver-missing"),
     ),
   {
     input: {
@@ -127,6 +139,48 @@ const Propose = endpoint(
   },
 );
 
+const GetInvitation = endpoint(
+  "/agreements/invite",
+  ({ session, token, user, agreement, initiator, counterpart, status, currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }) =>
+    receive({ session, token })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Linking.resolve({ token }).responds({ item: agreement }))
+      .then(
+        where(
+          Agreeing._canView({ agreement, user }).is({ agreement }),
+          Agreeing._get({ agreement }).is({ initiator, counterpart, status, currentVersion }),
+          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }),
+        )
+          .then(respond({ agreement, initiator, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }))
+          .named("authorized-with-resolver"),
+        where(
+          Agreeing._canView({ agreement, user }).is({ agreement }),
+          Agreeing._get({ agreement }).is({ initiator, counterpart, status, currentVersion }),
+          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }),
+          no(Agreeing._designatedResolver({ agreement })),
+        )
+          .then(respond({ agreement, initiator, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }))
+          .named("authorized-without-resolver"),
+        where(
+          Agreeing._get({ agreement }),
+          no(Agreeing._canView({ agreement, user }).is({ agreement })),
+        )
+          .then(respond({ error: "AGREEMENT_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+      ),
+  { input: { required: ["session", "token"] } },
+);
+
+const RevokeInvitation = endpoint(
+  "/agreements/invite/revoke",
+  ({ session, link, user }) =>
+    receive({ session, link })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Linking.revoke({ user, link }).responds({}))
+      .then(respond({ revoked: true })),
+  { input: { required: ["session", "link"] } },
+);
+
 const Get = endpoint(
   "/agreements/get",
   ({ session, agreement, user, initiator, counterpart, status, currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }) =>
@@ -134,38 +188,23 @@ const Get = endpoint(
       .then(Authenticating.authenticate({ session }).responds({ user }))
       .then(
         where(
-          Agreeing._get({ agreement }).is({ initiator: user, counterpart, status, currentVersion }),
-          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }),
-        )
-          .then(respond({ agreement, initiator: user, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }))
-          .named("initiator-with-resolver"),
-        where(
-          Agreeing._get({ agreement }).is({ initiator: user, counterpart, status, currentVersion }),
-          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }),
-          no(Agreeing._designatedResolver({ agreement })),
-        )
-          .then(respond({ agreement, initiator: user, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }))
-          .named("initiator-without-resolver"),
-        where(
-          Agreeing._get({ agreement }).is({ initiator, counterpart: user, status, currentVersion }),
-          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }),
-        )
-          .then(respond({ agreement, initiator, counterpart: user, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }))
-          .named("counterpart-with-resolver"),
-        where(
-          Agreeing._get({ agreement }).is({ initiator, counterpart: user, status, currentVersion }),
-          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }),
-          no(Agreeing._designatedResolver({ agreement })),
-        )
-          .then(respond({ agreement, initiator, counterpart: user, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }))
-          .named("counterpart-without-resolver"),
-        where(
+          Agreeing._canView({ agreement, user }).is({ agreement }),
           Agreeing._get({ agreement }).is({ initiator, counterpart, status, currentVersion }),
-          Agreeing._designatedResolver({ agreement }).is({ resolver: user }),
-          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }),
+          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }),
         )
-          .then(respond({ agreement, initiator, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver: user }))
-          .named("resolver"),
+          .then(respond({ agreement, initiator, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }))
+          .named("authorized-with-resolver"),
+        where(
+          Agreeing._canView({ agreement, user }).is({ agreement }),
+          Agreeing._get({ agreement }).is({ initiator, counterpart, status, currentVersion }),
+          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }),
+          no(Agreeing._designatedResolver({ agreement })),
+        )
+          .then(respond({ agreement, initiator, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }))
+          .named("authorized-without-resolver"),
+        where(Agreeing._get({ agreement }), no(Agreeing._canView({ agreement, user }).is({ agreement })))
+          .then(respond({ error: "AGREEMENT_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
         where(no(Agreeing._get({ agreement }))).then(respond({ error: "AGREEMENT_NOT_FOUND" })).named("missing"),
       ),
   { input: { required: ["session", "agreement"] } },
@@ -468,7 +507,7 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 
 export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
-  Agreements: { Propose, Get, Accept },
+  Agreements: { Propose, Get, GetInvitation, RevokeInvitation, Accept },
   Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
   Obligations: { GetObligation, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

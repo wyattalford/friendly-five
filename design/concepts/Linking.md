@@ -49,12 +49,24 @@ resolve(token: String) : returns (item: Item)
   then
     bind item to that link's item
     returns item
+  where no active link has token
+  then
+    make no change
+    refuses LINK_NOT_ACTIVE "That invitation link is not active."
 
 revoke(user: User, link: Link) : returns ()
   where link exists with status ACTIVE, and user is its owner
   then
     set link's status to REVOKED
     returns
+  where link does not exist or its status is REVOKED
+  then
+    make no change
+    refuses LINK_NOT_ACTIVE "That invitation link is not active."
+  where link exists with status ACTIVE, and user is not its owner
+  then
+    make no change
+    refuses LINK_NOT_OWNER "Only the link owner can revoke it."
 ```
 
 ## Queries

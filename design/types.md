@@ -1,7 +1,7 @@
 # Application types
 
-FriendlyFive currently identifies people through Authenticating. The remaining
-concept instances will be added as their implementations are completed.
+FriendlyFive identifies people through Authenticating and binds each external
+User and Item type to the concept instance that owns that identity.
 
 ```types
 ```
@@ -11,6 +11,10 @@ instantiate Authenticating
 
 instantiate Agreeing with
   User is Authenticating.User
+
+instantiate Linking with
+  User is Authenticating.User
+  Item is Agreeing.Agreement
 
 instantiate Resolving with
   User is Authenticating.User
