@@ -122,6 +122,9 @@ decide(user: User, case: Case, outcome: Outcome, evidence: String) : returns (re
   where case is unknown or case's status is FINAL
   then
     refuses DECISION_CASE_CLOSED "This case is already final or does not exist."
+  where case's status is not DISPUTED
+  then
+    refuses DECISION_NOT_DISPUTED "A resolver can decide only after a participant disputes the current report."
   where user does not match case's designated resolver
   then
     refuses DECISION_NOT_RESOLVER "Only the designated resolver can decide this case."
@@ -142,17 +145,20 @@ decide(user: User, case: Case, outcome: Outcome, evidence: String) : returns (re
 ## Queries
 
 ```queries
+_byItem(item: Item) : optional (case: Case)
+  returns the case for the item when one exists
+
+_canView(case: Case, user: User) : optional (case: Case)
+  returns the case when user is its first participant, second participant, or designated resolver
+
 _get(case: Case) : optional (item: Item, first: User, second: User, cutoff: DateTime, resolutionRule: String, resolver?: User, status: CaseStatus, currentReport?: Report, resolvedAt?: DateTime)
   returns the case details when the case exists
 
 _current(case: Case) : optional (report: Report, author: User, outcome: Outcome, evidence?: String, reportedAt: DateTime, disputedBy?: User, disputeReason?: String)
   returns the current report when the case has one
 
-_currentWithEvidence(case: Case) : optional (report: Report, author: User, outcome: Outcome, evidence: String, reportedAt: DateTime)
-  returns the current report when it has nonblank evidence
-
-_currentWithoutEvidence(case: Case) : optional (report: Report, author: User, outcome: Outcome, reportedAt: DateTime)
-  returns the current report when it has no evidence
+_hasEvidence(report: Report) : optional (report: Report)
+  returns the report when it exists and has nonblank evidence
 
 _reports(case: Case) : many (report: Report, author: User, outcome: Outcome, evidence?: String, reportedAt: DateTime, disputedBy?: User, disputeReason?: String)
   returns all reports for the case in ascending reportedAt order

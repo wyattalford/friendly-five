@@ -339,36 +339,64 @@ const GetResolution = endpoint(
   { input: { required: ["session", "case"] } },
 );
 
+const GetResolutionForAgreement = endpoint(
+  "/resolutions/by-agreement",
+  ({ session, agreement, user, case: caseId, cutoff, resolutionRule, status }) =>
+    receive({ session, agreement })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(
+          Resolving._byItem({ item: agreement }).is({ case: caseId }),
+          Resolving._canView({ case: caseId, user }).is({ case: caseId }),
+          Resolving._get({ case: caseId }).is({ cutoff, resolutionRule, status }),
+        )
+          .then(respond({ case: caseId, agreement, cutoff, resolutionRule, status }))
+          .named("authorized"),
+        where(
+          Resolving._byItem({ item: agreement }).is({ case: caseId }),
+          no(Resolving._canView({ case: caseId, user }).is({ case: caseId })),
+        )
+          .then(respond({ error: "RESOLUTION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(Resolving._byItem({ item: agreement })))
+          .then(respond({ error: "RESOLUTION_NOT_FOUND" }))
+          .named("missing"),
+      ),
+  { input: { required: ["session", "agreement"] } },
+);
+
 const GetCurrentReport = endpoint(
   "/resolutions/current",
-  ({ session, case: caseId, user, report, author, outcome, evidence, reportedAt }) =>
+  ({ session, case: caseId, user, report, author, outcome, evidence, reportedAt, disputedBy, disputeReason }) =>
     receive({ session, case: caseId })
       .then(Authenticating.authenticate({ session }).responds({ user }))
       .then(
         where(
-          Resolving._get({ case: caseId }).is({ first: user }),
-          Resolving._currentWithEvidence({ case: caseId }).is({ report, author, outcome, evidence, reportedAt }),
-        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt })).named("first-with-evidence"),
+          Resolving._canView({ case: caseId, user }).is({ case: caseId }),
+          Resolving._get({ case: caseId }).is({ status: "DISPUTED" }),
+          Resolving._current({ case: caseId }).is({ report, author, outcome, evidence, reportedAt, disputedBy, disputeReason }),
+        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt, disputedBy, disputeReason })).named("disputed-with-evidence"),
         where(
-          Resolving._get({ case: caseId }).is({ first: user }),
-          Resolving._currentWithoutEvidence({ case: caseId }).is({ report, author, outcome, reportedAt }),
-        ).then(respond({ case: caseId, report, author, outcome, reportedAt })).named("first-without-evidence"),
+          Resolving._canView({ case: caseId, user }).is({ case: caseId }),
+          Resolving._get({ case: caseId }).is({ status: "DISPUTED" }),
+          Resolving._current({ case: caseId }).is({ report, author, outcome, reportedAt, disputedBy, disputeReason }),
+          no(Resolving._hasEvidence({ report }).is({ report })),
+        ).then(respond({ case: caseId, report, author, outcome, reportedAt, disputedBy, disputeReason })).named("disputed-without-evidence"),
         where(
-          Resolving._get({ case: caseId }).is({ second: user }),
-          Resolving._currentWithEvidence({ case: caseId }).is({ report, author, outcome, evidence, reportedAt }),
-        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt })).named("second-with-evidence"),
+          Resolving._canView({ case: caseId, user }).is({ case: caseId }),
+          Resolving._current({ case: caseId }).is({ report, author, outcome, evidence, reportedAt }),
+          no(Resolving._get({ case: caseId }).is({ status: "DISPUTED" })),
+        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt })).named("with-evidence"),
         where(
-          Resolving._get({ case: caseId }).is({ second: user }),
-          Resolving._currentWithoutEvidence({ case: caseId }).is({ report, author, outcome, reportedAt }),
-        ).then(respond({ case: caseId, report, author, outcome, reportedAt })).named("second-without-evidence"),
+          Resolving._canView({ case: caseId, user }).is({ case: caseId }),
+          Resolving._current({ case: caseId }).is({ report, author, outcome, reportedAt }),
+          no(Resolving._hasEvidence({ report }).is({ report })),
+          no(Resolving._get({ case: caseId }).is({ status: "DISPUTED" })),
+        ).then(respond({ case: caseId, report, author, outcome, reportedAt })).named("without-evidence"),
         where(
-          Resolving._get({ case: caseId }).is({ resolver: user }),
-          Resolving._currentWithEvidence({ case: caseId }).is({ report, author, outcome, evidence, reportedAt }),
-        ).then(respond({ case: caseId, report, author, outcome, evidence, reportedAt })).named("resolver-with-evidence"),
-        where(
-          Resolving._get({ case: caseId }).is({ resolver: user }),
-          Resolving._currentWithoutEvidence({ case: caseId }).is({ report, author, outcome, reportedAt }),
-        ).then(respond({ case: caseId, report, author, outcome, reportedAt })).named("resolver-without-evidence"),
+          Resolving._get({ case: caseId }),
+          no(Resolving._canView({ case: caseId, user }).is({ case: caseId })),
+        ).then(respond({ error: "RESOLUTION_NOT_AUTHORIZED" })).named("unauthorized"),
         where(no(Resolving._get({ case: caseId }))).then(respond({ error: "RESOLUTION_NOT_FOUND" })).named("missing"),
       ),
   { input: { required: ["session", "case"] } },
@@ -522,6 +550,6 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
   Agreements: { Propose, Get, GetInvitation, RevokeInvitation, Accept },
-  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
+  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
   Obligations: { GetObligation, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

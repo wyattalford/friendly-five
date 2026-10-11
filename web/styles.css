@@ -20,7 +20,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -30,7 +31,8 @@ button {
 
 button:disabled,
 input:disabled,
-textarea:disabled {
+textarea:disabled,
+select:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -313,7 +315,9 @@ h1 {
 .agreement-form fieldset,
 .terms-card,
 .acceptance-card,
-.invitation-box {
+.invitation-box,
+.report-card,
+.action-card {
   border: 1px solid #d7d1c4;
   border-radius: 1rem;
   background: #fffdf8;
@@ -358,7 +362,9 @@ h1 {
 
 .form-field input,
 .form-field textarea,
-.copy-row input {
+.copy-row input,
+.resolution-form textarea,
+.resolution-form select {
   width: 100%;
   border: 1px solid #bfc6c0;
   border-radius: 0.65rem;
@@ -373,7 +379,9 @@ h1 {
 
 .form-field input:focus,
 .form-field textarea:focus,
-.copy-row input:focus {
+.copy-row input:focus,
+.resolution-form textarea:focus,
+.resolution-form select:focus {
   border-color: #32704b;
   outline: 3px solid #dceadf;
 }
@@ -491,6 +499,134 @@ h1 {
 .acceptance-card .button {
   width: fit-content;
   margin-top: 1rem;
+}
+
+.status-open {
+  color: #315c82;
+  background: #e1edf7;
+}
+
+.status-proposed {
+  color: #74500e;
+  background: #f7e8bb;
+}
+
+.status-disputed {
+  color: #812f2f;
+  background: #f8e4e1;
+}
+
+.status-final {
+  color: #285d3e;
+  background: #dceadf;
+}
+
+.resolution-summary .terms-card > p {
+  color: #405448;
+  line-height: 1.6;
+}
+
+.report-card,
+.action-card {
+  margin-top: 1rem;
+  padding: clamp(1.2rem, 3vw, 2rem);
+}
+
+.report-card h2,
+.action-card h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.report-card > p,
+.action-card > p {
+  line-height: 1.55;
+}
+
+.report-meta {
+  color: #68736c;
+}
+
+.evidence-block,
+.dispute-block {
+  margin-top: 1rem;
+  border-radius: 0.7rem;
+  padding: 1rem;
+  background: #f2efe8;
+}
+
+.dispute-block {
+  color: #6f2d2d;
+  background: #f8e4e1;
+}
+
+.evidence-block p,
+.dispute-block p {
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+}
+
+.resolution-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.resolution-form label {
+  margin-top: 0.5rem;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.resolution-form label span {
+  color: #68736c;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.resolution-form textarea,
+.resolution-form select {
+  width: 100%;
+  border: 1px solid #bfc6c0;
+  border-radius: 0.65rem;
+  padding: 0.78rem 0.85rem;
+  color: #17231d;
+  background: #fff;
+}
+
+.resolution-form textarea {
+  resize: vertical;
+}
+
+.resolution-form .button,
+.action-card > .button {
+  width: fit-content;
+  margin-top: 0.75rem;
+}
+
+.dispute-form {
+  margin-top: 1.25rem;
+  border-top: 1px solid #ded8cc;
+  padding-top: 1rem;
+}
+
+.button-danger {
+  border: 1px solid #93423d;
+  color: #812f2f;
+  background: #fff7f5;
+}
+
+.button-danger:hover:not(:disabled) {
+  color: #fff;
+  background: #93423d;
+}
+
+.resolver-card {
+  border-color: #9eb6a5;
+}
+
+.final-card {
+  border-color: #9eb6a5;
+  background: #f5fbf6;
 }
 
 @media (max-width: 760px) {

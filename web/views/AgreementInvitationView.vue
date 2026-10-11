@@ -179,6 +179,13 @@ watch(token, loadAgreement);
         >
           {{ accepting ? "Accepting…" : "Accept current terms" }}
         </button>
+        <RouterLink
+          v-if="agreement.status === 'ACCEPTED'"
+          class="button button-primary button-link"
+          :to="{ name: 'agreement-resolution', params: { agreement: agreement.agreement } }"
+        >
+          Open outcome resolution
+        </RouterLink>
       </section>
     </template>
   </section>

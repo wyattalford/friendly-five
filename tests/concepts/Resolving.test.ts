@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { MongoClient, type Db } from "mongodb";
 import {
   DecisionEvidenceRequired,
+  DecisionNotDisputed,
   DecisionNotResolver,
   ResolvingConcept,
   SubmissionTooEarly,
@@ -74,13 +75,38 @@ describe("Resolving", () => {
       cutoff: new Date(Date.now() - 1_000),
       resolutionRule: "Use the official final score",
     });
+    await expect(resolving._byItem({ item: "agreement-2" })).resolves.toEqual([
+      { case: opened.case },
+    ]);
+    await expect(resolving._canView({ case: opened.case, user: "morgan" })).resolves.toEqual([
+      { case: opened.case },
+    ]);
+    await expect(resolving._canView({ case: opened.case, user: "casey" })).resolves.toEqual([]);
+
+    await expect(
+      resolving.decide({
+        user: "morgan",
+        case: opened.case,
+        outcome: "TRUE",
+        evidence: "Official score",
+      }),
+    ).rejects.toThrow(DecisionNotDisputed);
+
     const submitted = await resolving.submit({ user: "wyatt", case: opened.case, outcome: "FALSE" });
+    await expect(resolving._hasEvidence({ report: submitted.report })).resolves.toEqual([]);
     await resolving.dispute({
       user: "alex",
       case: opened.case,
       report: submitted.report,
       reason: "The report used the wrong game date.",
     });
+    await expect(resolving._current({ case: opened.case })).resolves.toMatchObject([
+      {
+        report: submitted.report,
+        disputedBy: "alex",
+        disputeReason: "The report used the wrong game date.",
+      },
+    ]);
 
     await expect(
       resolving.decide({ user: "morgan", case: opened.case, outcome: "TRUE", evidence: "" }),
@@ -95,6 +121,9 @@ describe("Resolving", () => {
       outcome: "TRUE",
       evidence: "Official score confirms the result.",
     });
+    await expect(resolving._hasEvidence({ report: decision.report })).resolves.toEqual([
+      { report: decision.report },
+    ]);
     await expect(database.collection("resolving.cases").findOne({ _id: opened.case })).resolves.toMatchObject({
       status: "FINAL",
       currentReport: decision.report,

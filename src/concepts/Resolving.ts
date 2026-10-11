@@ -13,6 +13,7 @@ export class DisputeNotCurrent extends Error {}
 export class DisputeNotAuthorized extends Error {}
 export class DisputeEvidenceRequired extends Error {}
 export class DecisionCaseClosed extends Error {}
+export class DecisionNotDisputed extends Error {}
 export class DecisionNotResolver extends Error {}
 export class DecisionTooEarly extends Error {}
 export class DecisionEvidenceRequired extends Error {}
@@ -125,14 +126,28 @@ export class ResolvingConcept {
   async decide({ user, case: caseId, outcome, evidence }: { user: string; case: string; outcome: Outcome; evidence: string }) {
     const record = await this.cases.findOne({ _id: caseId });
     if (record === null || record.status === "FINAL") throw new DecisionCaseClosed("This case is already final or does not exist.");
+    if (record.status !== "DISPUTED") throw new DecisionNotDisputed("A resolver can decide only after a participant disputes the current report.");
     if (record.resolver === undefined || user !== record.resolver) throw new DecisionNotResolver("Only the designated resolver can decide this case.");
     if (Date.now() < record.cutoff.getTime()) throw new DecisionTooEarly("The resolution cutoff has not passed.");
     if (evidence.trim() === "") throw new DecisionEvidenceRequired("A resolver decision needs supporting evidence or an explanation.");
     await ensureIndexes(this.cases, this.reports);
     const report = crypto.randomUUID();
     await this.reports.insertOne({ _id: report, case: caseId, author: user, outcome, evidence, reportedAt: new Date() });
-    await this.cases.updateOne({ _id: caseId, status: { $in: ["OPEN", "PROPOSED", "DISPUTED"] } }, { $set: { currentReport: report, status: "FINAL", resolvedAt: new Date() } });
+    await this.cases.updateOne({ _id: caseId, status: "DISPUTED" }, { $set: { currentReport: report, status: "FINAL", resolvedAt: new Date() } });
     return { report };
+  }
+
+  async _byItem({ item }: { item: string }) {
+    const record = await this.cases.findOne({ item });
+    return record === null ? [] : [{ case: record._id }];
+  }
+
+  async _canView({ case: caseId, user }: { case: string; user: string }) {
+    const record = await this.cases.findOne({
+      _id: caseId,
+      $or: [{ first: user }, { second: user }, { resolver: user }],
+    });
+    return record === null ? [] : [{ case: record._id }];
   }
 
   async _get({ case: caseId }: { case: string }) {
@@ -167,20 +182,12 @@ export class ResolvingConcept {
     }];
   }
 
-  async _currentWithEvidence({ case: caseId }: { case: string }) {
-    const record = await this.cases.findOne({ _id: caseId });
-    if (record?.currentReport === undefined) return [];
-    const report = await this.reports.findOne({ _id: record.currentReport, evidence: { $exists: true, $ne: "" } });
-    if (report === null || report.evidence === undefined) return [];
-    return [{ report: report._id, author: report.author, outcome: report.outcome, evidence: report.evidence, reportedAt: report.reportedAt }];
-  }
-
-  async _currentWithoutEvidence({ case: caseId }: { case: string }) {
-    const record = await this.cases.findOne({ _id: caseId });
-    if (record?.currentReport === undefined) return [];
-    const report = await this.reports.findOne({ _id: record.currentReport, $or: [{ evidence: { $exists: false } }, { evidence: "" }] });
-    if (report === null) return [];
-    return [{ report: report._id, author: report.author, outcome: report.outcome, reportedAt: report.reportedAt }];
+  async _hasEvidence({ report }: { report: string }) {
+    const record = await this.reports.findOne({
+      _id: report,
+      evidence: { $exists: true, $ne: "" },
+    });
+    return record === null ? [] : [{ report: record._id }];
   }
 
   async _reports({ case: caseId }: { case: string }) {

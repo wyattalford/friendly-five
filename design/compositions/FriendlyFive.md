@@ -51,6 +51,7 @@ FriendlyFive.Agreements.GetInvitation at /agreements/invite
 FriendlyFive.Agreements.RevokeInvitation at /agreements/invite/revoke
 FriendlyFive.Agreements.Accept at /agreements/accept
 FriendlyFive.Outcomes.GetResolution at /resolutions/get
+FriendlyFive.Outcomes.GetResolutionForAgreement at /resolutions/by-agreement
 FriendlyFive.Outcomes.GetCurrentReport at /resolutions/current
 FriendlyFive.Outcomes.ReportOutcome at /resolutions/report
 FriendlyFive.Outcomes.ConfirmOutcome at /resolutions/confirm
@@ -71,6 +72,7 @@ NonBlank(value: String) : Boolean
 ```
 
 The resolution endpoints are [case review](reaction:FriendlyFive.Outcomes.GetResolution),
+[agreement-based case lookup](reaction:FriendlyFive.Outcomes.GetResolutionForAgreement),
 [current report review](reaction:FriendlyFive.Outcomes.GetCurrentReport),
 [outcome reporting](reaction:FriendlyFive.Outcomes.ReportOutcome),
 [outcome confirmation](reaction:FriendlyFive.Outcomes.ConfirmOutcome),
