@@ -1,8 +1,11 @@
+import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { assembleApplication } from "./src/assembly.ts";
+import { policy } from "./src/http.ts";
 
 export default {
   assemble: assembleApplication,
   title: "FriendlyFive",
+  wireName: "FriendlyFiveWire",
   design: {
     version: 1,
     documents: [
@@ -10,4 +13,5 @@ export default {
       new URL("./design/compositions/FriendlyFive.md", import.meta.url),
     ],
   },
+  projections: [httpWire({ policy, name: "FriendlyFiveWireHttp" })],
 };

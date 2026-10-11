@@ -120,13 +120,27 @@ const Get = endpoint(
           Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }),
         )
           .then(respond({ agreement, initiator: user, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }))
-          .named("initiator"),
+          .named("initiator-with-resolver"),
+        where(
+          Agreeing._get({ agreement }).is({ initiator: user, counterpart, status, currentVersion }),
+          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }),
+          no(Agreeing._designatedResolver({ agreement })),
+        )
+          .then(respond({ agreement, initiator: user, counterpart, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }))
+          .named("initiator-without-resolver"),
         where(
           Agreeing._get({ agreement }).is({ initiator, counterpart: user, status, currentVersion }),
           Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }),
         )
           .then(respond({ agreement, initiator, counterpart: user, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver }))
-          .named("counterpart"),
+          .named("counterpart-with-resolver"),
+        where(
+          Agreeing._get({ agreement }).is({ initiator, counterpart: user, status, currentVersion }),
+          Agreeing._version({ version: currentVersion }).is({ agreement, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }),
+          no(Agreeing._designatedResolver({ agreement })),
+        )
+          .then(respond({ agreement, initiator, counterpart: user, status, version: currentVersion, author, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule }))
+          .named("counterpart-without-resolver"),
         where(
           Agreeing._get({ agreement }).is({ initiator, counterpart, status, currentVersion }),
           Agreeing._designatedResolver({ agreement }).is({ resolver: user }),
