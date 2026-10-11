@@ -160,4 +160,6 @@ _designatedResolver(agreement: Agreement) : many (resolver: User)
   Answers the designated resolver when one exists, or no rows when the agreement has no resolver or is unknown.
 _canView(agreement: Agreement, user: User) : optional (agreement: Agreement)
   Answers one authorized row when user is a participant, or when the agreement is ACCEPTED and user is its designated resolver. Answers no row otherwise, including for an unknown agreement.
+_visibleTo(user: User) : many (agreement: Agreement, initiator: User, counterpart: User, status: AgreementStatus, currentVersion: Version)
+  Answers PENDING and ACCEPTED agreements where user is a participant, plus ACCEPTED agreements where user is the designated resolver. Orders rows by agreement identity and returns no rows when none are visible.
 ```

@@ -14,11 +14,17 @@ The account endpoints are [registration](reaction:FriendlyFive.Accounts.Register
 [current-user lookup](reaction:FriendlyFive.Accounts.CurrentUser), and
 [sign-out](reaction:FriendlyFive.Accounts.SignOut). Browser requests carry the
 session in a secure HTTP-only cookie, while the logical endpoints still require
-the session so authentication remains application behavior. The proposal flow
+the session so authentication remains application behavior. The authenticated
+[agreement dashboard](reaction:FriendlyFive.Agreements.ListAgreements) lists
+pending and accepted agreements for their participants and accepted agreements
+for their designated resolver. The proposal flow
 resolves counterpart and resolver usernames before invoking
 [Agreeing.propose](reaction:FriendlyFive.Agreements.Propose), then creates an
 active Linking reference owned by the initiator and returns its opaque token.
 A supplied nonblank resolver username must identify an account. Participants
+may submit replacement terms through
+[agreement revision](reaction:FriendlyFive.Agreements.Revise); the new version
+then requires acceptance by the other participant. Participants
 and an agreed resolver can read the accepted terms through
 [agreement review](reaction:FriendlyFive.Agreements.Get). The
 [invitation lookup](reaction:FriendlyFive.Agreements.GetInvitation) resolves
@@ -45,7 +51,9 @@ FriendlyFive.Accounts.Register at /auth/register
 FriendlyFive.Accounts.SignIn at /auth/sign-in
 FriendlyFive.Accounts.CurrentUser at /auth/current
 FriendlyFive.Accounts.SignOut at /auth/sign-out
+FriendlyFive.Agreements.ListAgreements at /agreements/list
 FriendlyFive.Agreements.Propose at /agreements/propose
+FriendlyFive.Agreements.Revise at /agreements/revise
 FriendlyFive.Agreements.Get at /agreements/get
 FriendlyFive.Agreements.GetInvitation at /agreements/invite
 FriendlyFive.Agreements.RevokeInvitation at /agreements/invite/revoke

@@ -15,6 +15,11 @@ export const router = createRouter({
       component: AgreementInvitationView,
     },
     {
+      path: "/agreements/review/:agreement",
+      name: "agreement-review",
+      component: AgreementInvitationView,
+    },
+    {
       path: "/agreements/:agreement",
       name: "agreement-resolution",
       component: AgreementResolutionView,

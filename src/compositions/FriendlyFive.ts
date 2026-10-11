@@ -1,5 +1,5 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { no, reaction, when, where } from "@mit-sdg/sync-engine/language";
+import { each, form, former, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
 import { computations, concepts } from "../concepts.ts";
 
 const { Agreeing, Authenticating, Linking, Resolving, ObligationTracking } = concepts;
@@ -37,6 +37,60 @@ const SignOut = endpoint(
     receive({ session })
       .then(Authenticating.signOut({ session }).responds({}))
       .then(respond({ signedOut: true })),
+  { input: { required: ["session"] } },
+);
+
+const AgreementDashboard = former(
+  "the agreements visible to (user)",
+  (
+    { user },
+    {
+      agreement,
+      initiator,
+      initiatorUsername,
+      counterpart,
+      counterpartUsername,
+      status,
+      currentVersion,
+      claim,
+      deadline,
+    },
+  ) =>
+    form({
+      agreements: each(
+        Agreeing._visibleTo({ user }).is({
+          agreement,
+          initiator,
+          counterpart,
+          status,
+          currentVersion,
+        }),
+      )
+        .where(
+          Agreeing._version({ version: currentVersion }).is({ agreement, claim, deadline }),
+          Authenticating._username({ user: initiator }).is({ username: initiatorUsername }),
+          Authenticating._username({ user: counterpart }).is({ username: counterpartUsername }),
+        )
+        .form({
+          agreement,
+          initiator,
+          initiatorUsername,
+          counterpart,
+          counterpartUsername,
+          status,
+          version: currentVersion,
+          claim,
+          deadline,
+        }),
+    }),
+);
+
+const ListAgreements = endpoint(
+  "/agreements/list",
+  ({ session, user }) =>
+    receive({ session })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(respond({ dashboard: AgreementDashboard({ user }) })),
   { input: { required: ["session"] } },
 );
 
@@ -127,6 +181,100 @@ const Propose = endpoint(
       required: [
         "session",
         "counterpartUsername",
+        "claim",
+        "deadline",
+        "initiatorStake",
+        "counterpartStake",
+        "exceptions",
+        "resolutionRule",
+      ],
+      defaults: { resolverUsername: "" },
+    },
+  },
+);
+
+const Revise = endpoint(
+  "/agreements/revise",
+  ({
+    session,
+    agreement,
+    expectedVersion,
+    claim,
+    deadline,
+    initiatorStake,
+    counterpartStake,
+    exceptions,
+    resolutionRule,
+    resolverUsername,
+    user,
+    resolver,
+    version,
+  }) =>
+    receive({
+      session,
+      agreement,
+      expectedVersion,
+      claim,
+      deadline,
+      initiatorStake,
+      counterpartStake,
+      exceptions,
+      resolutionRule,
+      resolverUsername,
+    })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(
+          Authenticating._byUsername({ username: resolverUsername ?? "" }).is({ user: resolver }),
+        )
+          .then(
+            Agreeing.revise({
+              user,
+              agreement,
+              expectedVersion,
+              claim,
+              deadline,
+              initiatorStake,
+              counterpartStake,
+              exceptions,
+              resolutionRule,
+              resolver,
+            }).responds({ version }),
+          )
+          .then(respond({ agreement, version }))
+          .named("resolver-found"),
+        where(
+          no(Authenticating._byUsername({ username: resolverUsername ?? "" })),
+          computations.Blank({ value: resolverUsername ?? "" }),
+        )
+          .then(
+            Agreeing.revise({
+              user,
+              agreement,
+              expectedVersion,
+              claim,
+              deadline,
+              initiatorStake,
+              counterpartStake,
+              exceptions,
+              resolutionRule,
+            }).responds({ version }),
+          )
+          .then(respond({ agreement, version }))
+          .named("resolver-omitted"),
+        where(
+          no(Authenticating._byUsername({ username: resolverUsername ?? "" })),
+          computations.NonBlank({ value: resolverUsername ?? "" }),
+        )
+          .then(respond({ error: "RESOLVER_NOT_FOUND" }))
+          .named("resolver-missing"),
+      ),
+  {
+    input: {
+      required: [
+        "session",
+        "agreement",
+        "expectedVersion",
         "claim",
         "deadline",
         "initiatorStake",
@@ -624,7 +772,7 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 
 export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
-  Agreements: { Propose, Get, GetInvitation, RevokeInvitation, Accept },
+  Agreements: { ListAgreements, Propose, Revise, Get, GetInvitation, RevokeInvitation, Accept },
   Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
   Obligations: { GetObligation, GetObligationForAgreement, GetCurrentCompletion, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

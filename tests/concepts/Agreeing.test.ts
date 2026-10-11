@@ -132,6 +132,18 @@ describe("Agreeing", () => {
     await expect(
       agreeing._canView({ agreement: created.agreement, user: "casey" }),
     ).resolves.toEqual([]);
+    await expect(agreeing._visibleTo({ user: "wyatt" })).resolves.toEqual([
+      {
+        agreement: created.agreement,
+        initiator: "wyatt",
+        counterpart: "alex",
+        status: "PENDING",
+        currentVersion: created.version,
+      },
+    ]);
+    await expect(agreeing._visibleTo({ user: "alex" })).resolves.toHaveLength(1);
+    await expect(agreeing._visibleTo({ user: "morgan" })).resolves.toEqual([]);
+    await expect(agreeing._visibleTo({ user: "casey" })).resolves.toEqual([]);
 
     await agreeing.accept({
       user: "alex",
@@ -141,5 +153,14 @@ describe("Agreeing", () => {
     await expect(
       agreeing._canView({ agreement: created.agreement, user: "morgan" }),
     ).resolves.toEqual([{ agreement: created.agreement }]);
+    await expect(agreeing._visibleTo({ user: "morgan" })).resolves.toEqual([
+      {
+        agreement: created.agreement,
+        initiator: "wyatt",
+        counterpart: "alex",
+        status: "ACCEPTED",
+        currentVersion: created.version,
+      },
+    ]);
   });
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, watch, type Ref } from "vue";
+import { computed, inject, onMounted, onUnmounted, ref, watch, type Ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api } from "../api.ts";
 
@@ -35,6 +35,8 @@ const decisionOutcome = ref<Outcome>("TRUE");
 const decisionEvidence = ref("");
 const completionEvidence = ref("");
 const completionDisputeEvidence = ref("");
+const currentTime = ref(Date.now());
+let cutoffTimer: ReturnType<typeof setTimeout> | undefined;
 
 const agreementId = computed(() => String(route.params.agreement ?? ""));
 const isParticipant = computed(
@@ -50,7 +52,9 @@ const isResolver = computed(
     agreement.value.resolver === currentUserId.value,
 );
 const cutoffPassed = computed(
-  () => resolution.value !== null && Date.now() >= new Date(resolution.value.cutoff).getTime(),
+  () =>
+    resolution.value !== null &&
+    currentTime.value >= new Date(resolution.value.cutoff).getTime(),
 );
 const canSubmitReport = computed(
   () =>
@@ -125,6 +129,24 @@ function obligationRequestError(code: string): string {
   return requestError(code);
 }
 
+function clearCutoffTimer(): void {
+  if (cutoffTimer !== undefined) clearTimeout(cutoffTimer);
+  cutoffTimer = undefined;
+}
+
+function scheduleCutoffUpdate(): void {
+  clearCutoffTimer();
+  currentTime.value = Date.now();
+  if (resolution.value === null) return;
+
+  const remaining = new Date(resolution.value.cutoff).getTime() - currentTime.value;
+  if (remaining <= 0) return;
+  cutoffTimer = setTimeout(() => {
+    currentTime.value = Date.now();
+    cutoffTimer = undefined;
+  }, remaining + 25);
+}
+
 async function loadObligation(): Promise<void> {
   if (
     resolution.value?.status !== "FINAL" ||
@@ -191,6 +213,7 @@ async function loadPage(showLoading = true): Promise<void> {
       return;
     }
     resolution.value = resolutionResult;
+    scheduleCutoffUpdate();
 
     if (resolutionResult.status === "OPEN") {
       currentReport.value = null;
@@ -407,6 +430,7 @@ async function disputeCompletion(): Promise<void> {
 }
 
 onMounted(loadPage);
+onUnmounted(clearCutoffTimer);
 watch(agreementId, () => loadPage());
 </script>
 

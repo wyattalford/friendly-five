@@ -274,4 +274,34 @@ export class AgreeingConcept {
     const version = await this.versions.findOne({ _id: record.currentVersion });
     return version?.resolver === user ? [{ agreement: record._id }] : [];
   }
+
+  async _visibleTo({ user }: { user: string }) {
+    const agreements = await this.agreements
+      .find({ status: { $in: ["PENDING", "ACCEPTED"] } })
+      .sort({ _id: 1 })
+      .toArray();
+    const visible: Array<{
+      agreement: string;
+      initiator: string;
+      counterpart: string;
+      status: Status;
+      currentVersion: string;
+    }> = [];
+    for (const agreement of agreements) {
+      let authorized = user === agreement.initiator || user === agreement.counterpart;
+      if (!authorized && agreement.status === "ACCEPTED") {
+        const version = await this.versions.findOne({ _id: agreement.currentVersion });
+        authorized = version?.resolver === user;
+      }
+      if (!authorized) continue;
+      visible.push({
+        agreement: agreement._id,
+        initiator: agreement.initiator,
+        counterpart: agreement.counterpart,
+        status: agreement.status,
+        currentVersion: agreement.currentVersion,
+      });
+    }
+    return visible;
+  }
 }

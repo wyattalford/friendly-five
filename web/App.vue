@@ -9,6 +9,7 @@ type NoticeKind = "error" | "success";
 const mode = ref<AuthMode>("sign-in");
 const username = ref("");
 const password = ref("");
+const showPassword = ref(false);
 const signedInUserId = ref("");
 const signedInUsername = ref("");
 const notice = ref("");
@@ -28,6 +29,7 @@ function showNotice(message: string, kind: NoticeKind): void {
 function selectMode(nextMode: AuthMode): void {
   mode.value = nextMode;
   password.value = "";
+  showPassword.value = false;
   notice.value = "";
 }
 
@@ -81,6 +83,7 @@ async function submitAuthentication(): Promise<void> {
 
       username.value = submittedUsername;
       password.value = "";
+      showPassword.value = false;
       mode.value = "sign-in";
       showNotice("Account created. Sign in with your new account.", "success");
       await nextTick();
@@ -95,6 +98,7 @@ async function submitAuthentication(): Promise<void> {
     }
 
     password.value = "";
+    showPassword.value = false;
     if (!(await refreshCurrentUser())) {
       showNotice("The session could not be loaded. Sign in again.", "error");
       return;
@@ -119,6 +123,7 @@ async function signOut(): Promise<void> {
 
     clearSignedInUser();
     password.value = "";
+    showPassword.value = false;
     showNotice(
       "error" in result ? "Your previous session ended. Sign in again." : "Signed out.",
       "success",
@@ -196,7 +201,28 @@ onMounted(loadCurrentUser);
           <input id="username" v-model="username" name="username" type="text" autocomplete="username" required :disabled="submitting" />
 
           <label for="password">Password</label>
-          <input id="password" ref="passwordInput" v-model="password" name="password" type="password" :autocomplete="mode === 'register' ? 'new-password' : 'current-password'" required :disabled="submitting" />
+          <div class="password-field">
+            <input
+              id="password"
+              ref="passwordInput"
+              v-model="password"
+              name="password"
+              :type="showPassword ? 'text' : 'password'"
+              :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
+              required
+              :disabled="submitting"
+            />
+            <button
+              class="password-toggle"
+              type="button"
+              :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              :aria-pressed="showPassword"
+              :disabled="submitting"
+              @click="showPassword = !showPassword"
+            >
+              {{ showPassword ? "Hide" : "Show" }}
+            </button>
+          </div>
 
           <p v-if="notice" class="notice" :class="`notice-${noticeKind}`" role="status" aria-live="polite">
             {{ notice }}

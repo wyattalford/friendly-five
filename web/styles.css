@@ -206,6 +206,32 @@ h1 {
   outline: 3px solid #dceadf;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 4.5rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.75rem;
+  border: 0;
+  padding: 0.2rem 0.3rem;
+  color: #285d3e;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 850;
+  transform: translateY(-50%);
+}
+
+.password-toggle:focus-visible {
+  border-radius: 0.3rem;
+  outline: 3px solid #dceadf;
+}
+
 .button {
   width: fit-content;
   border-radius: 0.65rem;
@@ -285,6 +311,118 @@ h1 {
 
 .dashboard-card .button {
   margin-top: 2rem;
+}
+
+.dashboard-page {
+  max-width: 70rem;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.dashboard-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.dashboard-heading h1 {
+  max-width: 16ch;
+  font-size: clamp(2.1rem, 5vw, 4rem);
+}
+
+.dashboard-heading .button {
+  flex: none;
+  margin-top: 0.5rem;
+}
+
+.dashboard-state {
+  border: 1px solid #d7d1c4;
+  border-radius: 1rem;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  background: #fffdf8;
+}
+
+.dashboard-state h2,
+.dashboard-state p {
+  margin: 0;
+}
+
+.dashboard-state p {
+  margin-top: 0.5rem;
+  color: #56635b;
+}
+
+.agreement-list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agreement-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(14rem, 1fr) auto;
+  gap: 1.5rem;
+  align-items: center;
+  border: 1px solid #d7d1c4;
+  border-radius: 1rem;
+  padding: clamp(1.2rem, 3vw, 1.7rem);
+  color: inherit;
+  background: #fffdf8;
+  text-decoration: none;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.agreement-list-item:hover {
+  border-color: #769782;
+  transform: translateY(-1px);
+}
+
+.agreement-list-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.agreement-list-title h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.agreement-list-main > p {
+  margin: 0.5rem 0 0;
+  color: #68736c;
+}
+
+.agreement-list-meta {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.agreement-list-meta dt {
+  color: #68736c;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agreement-list-meta dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.agreement-list-action {
+  color: #32704b;
+  font-size: 0.9rem;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .page-heading {
@@ -500,6 +638,35 @@ h1 {
 .acceptance-card .button {
   width: fit-content;
   margin-top: 1rem;
+}
+
+.acceptance-card .button + .button {
+  margin-left: 0.6rem;
+}
+
+.revision-form {
+  max-width: none;
+  margin-top: 1rem;
+}
+
+.revision-form > div:first-child > h2,
+.revision-form > div:first-child > p:last-child {
+  margin: 0;
+}
+
+.revision-form > div:first-child > p:last-child {
+  margin-top: 0.6rem;
+  color: #56635b;
+  line-height: 1.55;
+}
+
+.revision-actions {
+  margin-top: 0.25rem;
+}
+
+.revision-actions .button {
+  width: fit-content;
+  margin-top: 0;
 }
 
 .status-open {
@@ -718,6 +885,7 @@ h1 {
   }
 
   .agreement-header,
+  .dashboard-heading,
   .obligation-header,
   .copy-row {
     align-items: stretch;
@@ -726,5 +894,18 @@ h1 {
 
   .compact-button {
     width: 100%;
+  }
+
+  .acceptance-card .button + .button {
+    margin-left: 0;
+  }
+
+  .dashboard-heading .button {
+    width: fit-content;
+  }
+
+  .agreement-list-item {
+    grid-template-columns: 1fr;
+    gap: 1rem;
   }
 }
