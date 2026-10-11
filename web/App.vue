@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, provide, readonly, ref } from "vue";
+import { RouterLink, RouterView } from "vue-router";
 import { api } from "./api.ts";
 
 type AuthMode = "sign-in" | "register";
@@ -8,6 +9,7 @@ type NoticeKind = "error" | "success";
 const mode = ref<AuthMode>("sign-in");
 const username = ref("");
 const password = ref("");
+const signedInUserId = ref("");
 const signedInUsername = ref("");
 const notice = ref("");
 const noticeKind = ref<NoticeKind>("success");
@@ -15,7 +17,8 @@ const submitting = ref(false);
 const initializing = ref(true);
 const passwordInput = ref<HTMLInputElement | null>(null);
 
-const signedIn = computed(() => signedInUsername.value !== "");
+const signedIn = computed(() => signedInUserId.value !== "");
+provide("currentUserId", readonly(signedInUserId));
 
 function showNotice(message: string, kind: NoticeKind): void {
   notice.value = message;
@@ -28,11 +31,13 @@ function selectMode(nextMode: AuthMode): void {
   notice.value = "";
 }
 
-function showSignedInUser(nextUsername: string): void {
+function showSignedInUser(user: string, nextUsername: string): void {
+  signedInUserId.value = user;
   signedInUsername.value = nextUsername;
 }
 
 function clearSignedInUser(): void {
+  signedInUserId.value = "";
   signedInUsername.value = "";
 }
 
@@ -47,6 +52,16 @@ function errorMessage(error: string, action: AuthMode | "sign-out"): string {
   return "FriendlyFive could not complete that request. Try again.";
 }
 
+async function refreshCurrentUser(): Promise<boolean> {
+  const result = await api.auth.current();
+  if ("error" in result) {
+    clearSignedInUser();
+    return false;
+  }
+  showSignedInUser(result.user, result.username);
+  return true;
+}
+
 async function submitAuthentication(): Promise<void> {
   const submittedUsername = username.value.trim();
   if (submittedUsername === "" || password.value.trim() === "") {
@@ -58,10 +73,7 @@ async function submitAuthentication(): Promise<void> {
   notice.value = "";
   try {
     if (mode.value === "register") {
-      const result = await api.auth.register({
-        username: submittedUsername,
-        password: password.value,
-      });
+      const result = await api.auth.register({ username: submittedUsername, password: password.value });
       if ("error" in result) {
         showNotice(errorMessage(result.error, "register"), "error");
         return;
@@ -76,18 +88,18 @@ async function submitAuthentication(): Promise<void> {
       return;
     }
 
-    const result = await api.auth["sign-in"]({
-      username: submittedUsername,
-      password: password.value,
-    });
+    const result = await api.auth["sign-in"]({ username: submittedUsername, password: password.value });
     if ("error" in result) {
       showNotice(errorMessage(result.error, "sign-in"), "error");
       return;
     }
 
     password.value = "";
-    showSignedInUser(submittedUsername);
-    showNotice(`Signed in as ${submittedUsername}.`, "success");
+    if (!(await refreshCurrentUser())) {
+      showNotice("The session could not be loaded. Sign in again.", "error");
+      return;
+    }
+    notice.value = "";
   } catch {
     showNotice("FriendlyFive could not complete that request. Try again.", "error");
   } finally {
@@ -120,15 +132,7 @@ async function signOut(): Promise<void> {
 
 async function loadCurrentUser(): Promise<void> {
   try {
-    const result = await api.auth.current();
-    if ("error" in result) {
-      clearSignedInUser();
-      if (result.error !== "UNAUTHORIZED") {
-        showNotice("FriendlyFive could not check your session. Sign in to continue.", "error");
-      }
-      return;
-    }
-    showSignedInUser(result.username);
+    await refreshCurrentUser();
   } catch {
     clearSignedInUser();
     showNotice("FriendlyFive could not check your session. Sign in to continue.", "error");
@@ -143,8 +147,16 @@ onMounted(loadCurrentUser);
 <template>
   <main class="page-shell">
     <header class="site-header">
-      <a class="brand" href="/" aria-label="FriendlyFive home">FriendlyFive</a>
-      <span class="milestone">P2 MVP</span>
+      <RouterLink class="brand" :to="{ name: 'home' }" aria-label="FriendlyFive home">
+        FriendlyFive
+      </RouterLink>
+      <div v-if="signedIn" class="account-navigation">
+        <span class="signed-in-name">{{ signedInUsername }}</span>
+        <button class="text-button" type="button" :disabled="submitting" @click="signOut">
+          {{ submitting ? "Signing out…" : "Sign out" }}
+        </button>
+      </div>
+      <span v-else class="milestone">P2 MVP</span>
     </header>
 
     <section v-if="initializing" class="welcome-card account-card" aria-labelledby="loading-heading">
@@ -152,28 +164,7 @@ onMounted(loadCurrentUser);
       <h1 id="loading-heading">Checking your session…</h1>
     </section>
 
-    <section v-else-if="signedIn" class="welcome-card account-card" aria-labelledby="account-heading">
-      <p class="eyebrow">Signed in</p>
-      <h1 id="account-heading">Welcome, {{ signedInUsername }}.</h1>
-      <p class="intro">
-        Your account is ready. Agreement creation and review are the next part of
-        the FriendlyFive journey.
-      </p>
-
-      <p
-        v-if="notice"
-        class="notice"
-        :class="`notice-${noticeKind}`"
-        role="status"
-        aria-live="polite"
-      >
-        {{ notice }}
-      </p>
-
-      <button class="button button-secondary" type="button" :disabled="submitting" @click="signOut">
-        {{ submitting ? "Signing out…" : "Sign out" }}
-      </button>
-    </section>
+    <RouterView v-else-if="signedIn" />
 
     <section v-else class="auth-layout" aria-labelledby="welcome-heading">
       <div class="auth-introduction">
@@ -187,79 +178,32 @@ onMounted(loadCurrentUser);
 
       <div class="auth-card">
         <div class="auth-switcher" aria-label="Account action">
-          <button
-            type="button"
-            :class="{ active: mode === 'sign-in' }"
-            :aria-pressed="mode === 'sign-in'"
-            @click="selectMode('sign-in')"
-          >
+          <button type="button" :class="{ active: mode === 'sign-in' }" :aria-pressed="mode === 'sign-in'" @click="selectMode('sign-in')">
             Sign in
           </button>
-          <button
-            type="button"
-            :class="{ active: mode === 'register' }"
-            :aria-pressed="mode === 'register'"
-            @click="selectMode('register')"
-          >
+          <button type="button" :class="{ active: mode === 'register' }" :aria-pressed="mode === 'register'" @click="selectMode('register')">
             Register
           </button>
         </div>
 
         <div class="form-heading">
           <h2>{{ mode === "sign-in" ? "Welcome back" : "Create an account" }}</h2>
-          <p>
-            {{
-              mode === "sign-in"
-                ? "Enter the credentials for your FriendlyFive account."
-                : "Choose the credentials you will use to return."
-            }}
-          </p>
+          <p>{{ mode === "sign-in" ? "Enter the credentials for your FriendlyFive account." : "Choose the credentials you will use to return." }}</p>
         </div>
 
         <form class="auth-form" @submit.prevent="submitAuthentication">
           <label for="username">Username</label>
-          <input
-            id="username"
-            v-model="username"
-            name="username"
-            type="text"
-            autocomplete="username"
-            required
-            :disabled="submitting"
-          />
+          <input id="username" v-model="username" name="username" type="text" autocomplete="username" required :disabled="submitting" />
 
           <label for="password">Password</label>
-          <input
-            id="password"
-            ref="passwordInput"
-            v-model="password"
-            name="password"
-            type="password"
-            :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
-            required
-            :disabled="submitting"
-          />
+          <input id="password" ref="passwordInput" v-model="password" name="password" type="password" :autocomplete="mode === 'register' ? 'new-password' : 'current-password'" required :disabled="submitting" />
 
-          <p
-            v-if="notice"
-            class="notice"
-            :class="`notice-${noticeKind}`"
-            role="status"
-            aria-live="polite"
-          >
+          <p v-if="notice" class="notice" :class="`notice-${noticeKind}`" role="status" aria-live="polite">
             {{ notice }}
           </p>
 
           <button class="button button-primary" type="submit" :disabled="submitting">
-            {{
-              submitting
-                ? mode === "sign-in"
-                  ? "Signing in…"
-                  : "Creating account…"
-                : mode === "sign-in"
-                  ? "Sign in"
-                  : "Create account"
-            }}
+            {{ submitting ? (mode === "sign-in" ? "Signing in…" : "Creating account…") : (mode === "sign-in" ? "Sign in" : "Create account") }}
           </button>
         </form>
       </div>

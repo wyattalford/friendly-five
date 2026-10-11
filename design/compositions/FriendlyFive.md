@@ -23,7 +23,8 @@ and an agreed resolver can read the accepted terms through
 [agreement review](reaction:FriendlyFive.Agreements.Get). The
 [invitation lookup](reaction:FriendlyFive.Agreements.GetInvitation) resolves
 the token and independently checks the signed-in user's agreement role before
-returning private terms. The
+returning private terms. Agreement responses obtain display usernames from
+Authenticating while retaining opaque user identities for role checks. The
 [invitation revocation](reaction:FriendlyFive.Agreements.RevokeInvitation)
 authenticates the requester before Linking enforces link ownership. The
 counterpart accepts through

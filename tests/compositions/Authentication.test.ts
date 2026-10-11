@@ -72,11 +72,15 @@ describe("browser authentication boundary", () => {
 
     const current = await handler(post("/auth/current", {}, cookie));
     expect(current.status).toBe(200);
-    expect(await current.json()).toEqual({ username: "wyatt" });
+    const currentBody = (await current.json()) as { user: string; username: string };
+    expect(currentBody.username).toBe("wyatt");
+    expect(
+      (await database.collection("authenticating.users").findOne({ username: "wyatt" }))?._id,
+    ).toBe(currentBody.user);
 
     const spoofed = await handler(post("/auth/current", { session: "invented" }, cookie));
     expect(spoofed.status).toBe(200);
-    expect(await spoofed.json()).toEqual({ username: "wyatt" });
+    expect(await spoofed.json()).toEqual(currentBody);
 
     const signedOut = await handler(post("/auth/sign-out", {}, cookie));
     expect(signedOut.status).toBe(200);

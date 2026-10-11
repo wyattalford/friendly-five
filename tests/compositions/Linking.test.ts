@@ -112,6 +112,10 @@ describe("agreement invitation boundary", () => {
       version: invitation.version,
       claim: terms.claim,
       status: "PENDING",
+      initiatorUsername: "wyatt",
+      counterpartUsername: "alex",
+      authorUsername: "wyatt",
+      resolverUsername: "morgan",
     });
 
     const outsider = await handler(
