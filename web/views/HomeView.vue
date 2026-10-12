@@ -14,9 +14,15 @@ const agreements = ref<AgreementSummary[]>([]);
 const loading = ref(true);
 const error = ref("");
 
+function statusFor(agreement: AgreementSummary): string {
+  return agreement.obligationStatus ?? agreement.resolutionStatus ?? agreement.status;
+}
+
 const orderedAgreements = computed(() =>
   [...agreements.value].sort((left, right) => {
-    if (left.status !== right.status) return left.status === "PENDING" ? -1 : 1;
+    const leftStatus = statusFor(left);
+    const rightStatus = statusFor(right);
+    if (leftStatus !== rightStatus) return leftStatus === "PENDING" ? -1 : 1;
     return new Date(left.deadline).getTime() - new Date(right.deadline).getTime();
   }),
 );
@@ -36,6 +42,12 @@ function roleFor(agreement: AgreementSummary): string {
 
 function peopleFor(agreement: AgreementSummary): string {
   return `${agreement.initiatorUsername} and ${agreement.counterpartUsername}`;
+}
+
+function awaitingFor(agreement: AgreementSummary): string {
+  return agreement.author === agreement.initiator
+    ? agreement.counterpartUsername
+    : agreement.initiatorUsername;
 }
 
 function destinationFor(agreement: AgreementSummary) {
@@ -105,8 +117,8 @@ onMounted(loadAgreements);
           <div class="agreement-list-main">
             <div class="agreement-list-title">
               <h2>{{ agreement.claim }}</h2>
-              <span class="status-badge" :class="`status-${agreement.status.toLowerCase()}`">
-                {{ agreement.status }}
+              <span class="status-badge" :class="`status-${statusFor(agreement).toLowerCase()}`">
+                {{ statusFor(agreement) }}
               </span>
             </div>
             <p>{{ peopleFor(agreement) }}</p>
@@ -115,6 +127,10 @@ onMounted(loadAgreements);
             <div>
               <dt>Your role</dt>
               <dd>{{ roleFor(agreement) }}</dd>
+            </div>
+            <div v-if="agreement.status === 'PENDING'">
+              <dt>Waiting for</dt>
+              <dd>{{ awaitingFor(agreement) }} to accept</dd>
             </div>
             <div>
               <dt>Resolution cutoff</dt>

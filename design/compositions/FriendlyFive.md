@@ -17,14 +17,24 @@ session in a secure HTTP-only cookie, while the logical endpoints still require
 the session so authentication remains application behavior. The authenticated
 [agreement dashboard](reaction:FriendlyFive.Agreements.ListAgreements) lists
 pending and accepted agreements for their participants and accepted agreements
-for their designated resolver. The proposal flow
+for their designated resolver. Each dashboard entry also includes its current
+resolution status and, when one exists, its current obligation status so the
+interface can show progress beyond agreement acceptance. Pending entries also
+identify the current version's author so the interface can name the other
+participant whose acceptance is required. The proposal flow
 resolves counterpart and resolver usernames before invoking
 [Agreeing.propose](reaction:FriendlyFive.Agreements.Propose), then creates an
 active Linking reference owned by the initiator and returns its opaque token.
 A supplied nonblank resolver username must identify an account. Participants
 may submit replacement terms through
 [agreement revision](reaction:FriendlyFive.Agreements.Revise); the new version
-then requires acceptance by the other participant. Participants
+then requires acceptance by the other participant. While an agreement remains
+pending, an authorized participant can retrieve its active invitation through
+[invitation-link lookup](reaction:FriendlyFive.Agreements.GetInvitationLink).
+The current version's other participant may
+[reject it](reaction:FriendlyFive.Agreements.Reject), while its author may
+[withdraw it](reaction:FriendlyFive.Agreements.Withdraw).
+Participants
 and an agreed resolver can read the accepted terms through
 [agreement review](reaction:FriendlyFive.Agreements.Get). The
 [invitation lookup](reaction:FriendlyFive.Agreements.GetInvitation) resolves
@@ -54,10 +64,13 @@ FriendlyFive.Accounts.SignOut at /auth/sign-out
 FriendlyFive.Agreements.ListAgreements at /agreements/list
 FriendlyFive.Agreements.Propose at /agreements/propose
 FriendlyFive.Agreements.Revise at /agreements/revise
+FriendlyFive.Agreements.GetInvitationLink at /agreements/link
 FriendlyFive.Agreements.Get at /agreements/get
 FriendlyFive.Agreements.GetInvitation at /agreements/invite
 FriendlyFive.Agreements.RevokeInvitation at /agreements/invite/revoke
 FriendlyFive.Agreements.Accept at /agreements/accept
+FriendlyFive.Agreements.Reject at /agreements/reject
+FriendlyFive.Agreements.Withdraw at /agreements/withdraw
 FriendlyFive.Outcomes.GetResolution at /resolutions/get
 FriendlyFive.Outcomes.GetResolutionForAgreement at /resolutions/by-agreement
 FriendlyFive.Outcomes.GetCurrentReport at /resolutions/current

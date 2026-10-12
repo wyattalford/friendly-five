@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, watch, type Ref } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { api } from "../api.ts";
 
 type InvitationResult = Awaited<ReturnType<typeof api.agreements.invite>>;
@@ -8,6 +8,7 @@ type DirectResult = Awaited<ReturnType<typeof api.agreements.get>>;
 type AgreementDetails = Exclude<InvitationResult | DirectResult, { error: unknown }>;
 
 const route = useRoute();
+const router = useRouter();
 const currentUserId = inject<Readonly<Ref<string>>>("currentUserId");
 if (currentUserId === undefined) throw new Error("Agreement view requires authentication context.");
 
@@ -15,6 +16,7 @@ const agreement = ref<AgreementDetails | null>(null);
 const loading = ref(true);
 const accepting = ref(false);
 const revising = ref(false);
+const endingProposal = ref<"reject" | "withdraw" | null>(null);
 const revisionMode = ref(false);
 const error = ref("");
 const notice = ref("");
@@ -25,9 +27,20 @@ const revisionCounterpartStake = ref("");
 const revisionExceptions = ref("");
 const revisionRule = ref("");
 const revisionResolverUsername = ref("");
+const invitationToken = ref("");
+const copiedLink = ref(false);
+const linkError = ref("");
 
 const token = computed(() => String(route.params.token ?? ""));
 const agreementId = computed(() => String(route.params.agreement ?? ""));
+const invitationUrl = computed(() => {
+  if (invitationToken.value === "") return "";
+  const location = router.resolve({
+    name: "agreement-invite",
+    params: { token: invitationToken.value },
+  });
+  return new URL(location.href, window.location.origin).toString();
+});
 const canAccept = computed(
   () =>
     agreement.value?.status === "PENDING" &&
@@ -40,6 +53,12 @@ const canRevise = computed(
     agreement.value?.status === "PENDING" &&
     (agreement.value.initiator === currentUserId.value ||
       agreement.value.counterpart === currentUserId.value),
+);
+const canReject = computed(() => canAccept.value);
+const canWithdraw = computed(
+  () =>
+    agreement.value?.status === "PENDING" &&
+    agreement.value.author === currentUserId.value,
 );
 const awaitingUsername = computed(() => {
   if (agreement.value === null) return "the other participant";
@@ -80,6 +99,18 @@ function revisionError(code: string): string {
   return "FriendlyFive could not submit the counter proposal. Try again.";
 }
 
+function endingError(code: string, action: "reject" | "withdraw"): string {
+  if (code === "FORBIDDEN") {
+    return action === "reject"
+      ? "Only the participant reviewing this version can reject it."
+      : "Only this version's author can withdraw it.";
+  }
+  if (code === "INVALID_REQUEST") return "This proposal is no longer pending.";
+  if (code === "UNAUTHORIZED") return "Your session ended. Sign in and try again.";
+  if (code === "NETWORK_ERROR") return "FriendlyFive could not reach the server. Try again.";
+  return `FriendlyFive could not ${action} this proposal. Try again.`;
+}
+
 function formatDeadline(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -114,9 +145,39 @@ function cancelRevision(): void {
   error.value = "";
 }
 
+async function loadInvitationLink(loadedAgreement: AgreementDetails): Promise<void> {
+  invitationToken.value = token.value;
+  linkError.value = "";
+  copiedLink.value = false;
+  if (loadedAgreement.status !== "PENDING" || invitationToken.value !== "") return;
+
+  try {
+    const result = await api.agreements.link({ agreement: loadedAgreement.agreement });
+    if ("error" in result) {
+      linkError.value = "The invitation link is no longer active.";
+      return;
+    }
+    invitationToken.value = result.token;
+  } catch {
+    linkError.value = "FriendlyFive could not load the invitation link. Try again.";
+  }
+}
+
+async function copyInvitation(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(invitationUrl.value);
+    copiedLink.value = true;
+  } catch {
+    linkError.value = "Copying failed. Select and copy the invitation URL below.";
+  }
+}
+
 async function loadAgreement(): Promise<void> {
   loading.value = true;
   error.value = "";
+  invitationToken.value = "";
+  linkError.value = "";
+  copiedLink.value = false;
   try {
     const result = token.value === ""
       ? await api.agreements.get({ agreement: agreementId.value })
@@ -127,6 +188,7 @@ async function loadAgreement(): Promise<void> {
       return;
     }
     agreement.value = result;
+    await loadInvitationLink(result);
   } catch {
     agreement.value = null;
     error.value = "FriendlyFive could not load this agreement. Try again.";
@@ -155,6 +217,34 @@ async function acceptAgreement(): Promise<void> {
     error.value = "FriendlyFive could not accept this agreement. Try again.";
   } finally {
     accepting.value = false;
+  }
+}
+
+async function endProposal(action: "reject" | "withdraw"): Promise<void> {
+  if (agreement.value === null) return;
+  endingProposal.value = action;
+  error.value = "";
+  notice.value = "";
+  try {
+    const request = {
+      agreement: agreement.value.agreement,
+      version: agreement.value.version,
+    };
+    const result = action === "reject"
+      ? await api.agreements.reject(request)
+      : await api.agreements.withdraw(request);
+    if ("error" in result) {
+      error.value = endingError(result.error, action);
+      return;
+    }
+    notice.value = action === "reject"
+      ? "Proposal rejected. No agreement was formed."
+      : "Proposal withdrawn. No agreement was formed.";
+    await loadAgreement();
+  } catch {
+    error.value = `FriendlyFive could not ${action} this proposal. Try again.`;
+  } finally {
+    endingProposal.value = null;
   }
 }
 
@@ -263,9 +353,37 @@ watch([token, agreementId], loadAgreement);
         </section>
       </div>
 
+      <section v-if="agreement.status === 'PENDING'" class="invitation-box pending-invitation">
+        <h2>Share this proposal</h2>
+        <p>
+          This link continues to open the latest proposed version until both participants agree.
+        </p>
+        <template v-if="invitationUrl">
+          <label for="pending-invitation-url">Invitation URL</label>
+          <div class="copy-row">
+            <input
+              id="pending-invitation-url"
+              :value="invitationUrl"
+              readonly
+              @focus="($event.target as HTMLInputElement).select()"
+            />
+            <button class="button button-secondary compact-button" type="button" @click="copyInvitation">
+              {{ copiedLink ? "Copied" : "Copy" }}
+            </button>
+          </div>
+        </template>
+        <p v-if="linkError" class="notice notice-error" role="alert">{{ linkError }}</p>
+      </section>
+
       <section class="acceptance-card">
         <p v-if="agreement.status === 'ACCEPTED'">
           These terms are fixed. The resolution case is ready for outcome reporting after the cutoff.
+        </p>
+        <p v-else-if="agreement.status === 'REJECTED'">
+          This proposal was rejected. No agreement was formed from these terms.
+        </p>
+        <p v-else-if="agreement.status === 'WITHDRAWN'">
+          This proposal was withdrawn by its author. No agreement was formed from these terms.
         </p>
         <p v-else-if="canAccept">
           Review every term before accepting. Acceptance fixes this version for both participants.
@@ -286,6 +404,24 @@ watch([token, agreementId], loadAgreement);
           @click="acceptAgreement"
         >
           {{ accepting ? "Accepting…" : "Accept current terms" }}
+        </button>
+        <button
+          v-if="canReject && !revisionMode"
+          class="button button-danger"
+          type="button"
+          :disabled="accepting || endingProposal !== null"
+          @click="endProposal('reject')"
+        >
+          {{ endingProposal === "reject" ? "Rejecting…" : "Reject proposal" }}
+        </button>
+        <button
+          v-if="canWithdraw && !revisionMode"
+          class="button button-danger"
+          type="button"
+          :disabled="endingProposal !== null"
+          @click="endProposal('withdraw')"
+        >
+          {{ endingProposal === "withdraw" ? "Withdrawing…" : "Withdraw proposal" }}
         </button>
         <button
           v-if="canRevise && !revisionMode"

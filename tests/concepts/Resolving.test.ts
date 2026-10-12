@@ -1,10 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { MongoClient, type Db } from "mongodb";
 import {
+  ConfirmationNotAuthorized,
+  ConfirmationNotCurrent,
   DecisionEvidenceRequired,
   DecisionNotDisputed,
   DecisionNotResolver,
+  DisputeEvidenceRequired,
+  DisputeNotAuthorized,
   ResolvingConcept,
+  SubmissionInvalidEvidence,
+  SubmissionNotParticipant,
   SubmissionTooEarly,
 } from "../../src/concepts/Resolving.ts";
 
@@ -147,5 +153,117 @@ describe("Resolving", () => {
     await expect(
       resolving.submit({ user: "wyatt", case: opened.case, outcome: "VOID" }),
     ).rejects.toThrow(SubmissionTooEarly);
+  });
+
+  test("lets participants replace a disputed report when no resolver is designated", async () => {
+    const resolving = new ResolvingConcept(database);
+    const opened = await resolving.open({
+      item: "agreement-no-resolver",
+      first: "wyatt",
+      second: "alex",
+      cutoff: new Date(Date.now() - 1_000),
+      resolutionRule: "Use the official final score",
+    });
+    const first = await resolving.submit({
+      user: "wyatt",
+      case: opened.case,
+      outcome: "TRUE",
+      evidence: "Initial score report",
+    });
+
+    await expect(
+      resolving.dispute({ user: "alex", case: opened.case, report: first.report, reason: "  " }),
+    ).rejects.toThrow(DisputeEvidenceRequired);
+    await resolving.dispute({
+      user: "alex",
+      case: opened.case,
+      report: first.report,
+      reason: "The game was cancelled, so the claim should be void.",
+    });
+
+    const replacement = await resolving.submit({
+      user: "alex",
+      case: opened.case,
+      outcome: "VOID",
+    });
+    await expect(
+      resolving.confirm({ user: "alex", case: opened.case, report: replacement.report }),
+    ).rejects.toThrow(ConfirmationNotAuthorized);
+    await expect(
+      resolving.confirm({ user: "wyatt", case: opened.case, report: first.report }),
+    ).rejects.toThrow(ConfirmationNotCurrent);
+    await resolving.confirm({ user: "wyatt", case: opened.case, report: replacement.report });
+
+    await expect(resolving._get({ case: opened.case })).resolves.toMatchObject([
+      { status: "FINAL", currentReport: replacement.report, resolvedAt: expect.any(Date) },
+    ]);
+    await expect(resolving._reports({ case: opened.case })).resolves.toMatchObject([
+      { report: first.report, outcome: "TRUE", disputedBy: "alex" },
+      { report: replacement.report, outcome: "VOID", author: "alex" },
+    ]);
+  });
+
+  test("allows an agreed participant resolver to decide a disputed case", async () => {
+    const resolving = new ResolvingConcept(database);
+    const opened = await resolving.open({
+      item: "agreement-participant-resolver",
+      first: "wyatt",
+      second: "alex",
+      resolver: "wyatt",
+      cutoff: new Date(Date.now() - 1_000),
+      resolutionRule: "Use the official final score",
+    });
+    const submitted = await resolving.submit({
+      user: "alex",
+      case: opened.case,
+      outcome: "TRUE",
+    });
+    await resolving.dispute({
+      user: "wyatt",
+      case: opened.case,
+      report: submitted.report,
+      reason: "The official record says the game was abandoned.",
+    });
+    const decision = await resolving.decide({
+      user: "wyatt",
+      case: opened.case,
+      outcome: "VOID",
+      evidence: "The official record marks the game abandoned.",
+    });
+
+    await expect(resolving._current({ case: opened.case })).resolves.toMatchObject([
+      { report: decision.report, author: "wyatt", outcome: "VOID" },
+    ]);
+    await expect(resolving._get({ case: opened.case })).resolves.toMatchObject([
+      { resolver: "wyatt", status: "FINAL" },
+    ]);
+  });
+
+  test("rejects reports and disputes from ineligible users or blank supplied evidence", async () => {
+    const resolving = new ResolvingConcept(database);
+    const opened = await resolving.open({
+      item: "agreement-authorization",
+      first: "wyatt",
+      second: "alex",
+      cutoff: new Date(Date.now() - 1_000),
+      resolutionRule: "Use the official final score",
+    });
+
+    await expect(
+      resolving.submit({ user: "casey", case: opened.case, outcome: "TRUE" }),
+    ).rejects.toThrow(SubmissionNotParticipant);
+    await expect(
+      resolving.submit({ user: "wyatt", case: opened.case, outcome: "TRUE", evidence: " " }),
+    ).rejects.toThrow(SubmissionInvalidEvidence);
+
+    const report = await resolving.submit({ user: "wyatt", case: opened.case, outcome: "TRUE" });
+    await expect(
+      resolving.dispute({
+        user: "wyatt",
+        case: opened.case,
+        report: report.report,
+        reason: "I changed my mind.",
+      }),
+    ).rejects.toThrow(DisputeNotAuthorized);
   });
 });

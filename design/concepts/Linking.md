@@ -72,4 +72,6 @@ revoke(user: User, link: Link) : returns ()
 ## Queries
 
 ```queries
+_activeForItem(item: Item) : optional (link: Link, token: String)
+  returns one active link for item, ordered by link identity, or no row when item has no active link
 ```

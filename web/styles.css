@@ -542,6 +542,30 @@ h1 {
   padding: 1.25rem;
 }
 
+.pending-invitation {
+  margin-top: 1rem;
+}
+
+.pending-invitation h2,
+.pending-invitation > p:first-of-type {
+  margin: 0;
+}
+
+.pending-invitation h2 {
+  font-size: 1.2rem;
+}
+
+.pending-invitation > p:first-of-type {
+  margin-top: 0.45rem;
+  color: #56635b;
+  line-height: 1.5;
+}
+
+.pending-invitation label {
+  display: inline-block;
+  margin-top: 1rem;
+}
+
 .copy-row,
 .action-row {
   display: flex;

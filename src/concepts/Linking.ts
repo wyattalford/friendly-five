@@ -49,6 +49,14 @@ export class LinkingConcept {
     return { item: record.item };
   }
 
+  async _activeForItem({ item }: { item: string }) {
+    const record = await this.links.findOne(
+      { item, status: "ACTIVE" },
+      { sort: { _id: 1 } },
+    );
+    return record === null ? [] : [{ link: record._id, token: record.token }];
+  }
+
   async revoke({ user, link }: { user: string; link: string }) {
     const record = await this.links.findOne({ _id: link });
     if (record === null || record.status !== "ACTIVE") {

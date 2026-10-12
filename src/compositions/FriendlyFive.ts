@@ -1,5 +1,5 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
+import { each, form, former, no, reaction, view, when, where, whether } from "@mit-sdg/sync-engine/language";
 import { computations, concepts } from "../concepts.ts";
 
 const { Agreeing, Authenticating, Linking, Resolving, ObligationTracking } = concepts;
@@ -40,6 +40,16 @@ const SignOut = endpoint(
   { input: { required: ["session"] } },
 );
 
+const VisibleObligationStatus = view(
+  "the obligation status for (item) visible to (user)",
+  ({ item, user }, { obligationStatus }, { obligation }) =>
+    where(
+      ObligationTracking._byItem({ item }).is({ obligation }),
+      ObligationTracking._canView({ obligation, user }).is({ obligation }),
+      ObligationTracking._get({ obligation }).is({ status: obligationStatus }),
+    ),
+).optional();
+
 const AgreementDashboard = former(
   "the agreements visible to (user)",
   (
@@ -52,8 +62,12 @@ const AgreementDashboard = former(
       counterpartUsername,
       status,
       currentVersion,
+      author,
       claim,
       deadline,
+      resolutionCase,
+      resolutionStatus,
+      obligationStatus,
     },
   ) =>
     form({
@@ -67,9 +81,12 @@ const AgreementDashboard = former(
         }),
       )
         .where(
-          Agreeing._version({ version: currentVersion }).is({ agreement, claim, deadline }),
+          Agreeing._version({ version: currentVersion }).is({ agreement, author, claim, deadline }),
           Authenticating._username({ user: initiator }).is({ username: initiatorUsername }),
           Authenticating._username({ user: counterpart }).is({ username: counterpartUsername }),
+          whether(Resolving._byItem({ item: agreement }).is({ case: resolutionCase })),
+          whether(Resolving._get({ case: resolutionCase }).is({ status: resolutionStatus })),
+          whether(VisibleObligationStatus({ item: agreement, user }).is({ obligationStatus })),
         )
         .form({
           agreement,
@@ -79,8 +96,11 @@ const AgreementDashboard = former(
           counterpartUsername,
           status,
           version: currentVersion,
+          author,
           claim,
           deadline,
+          resolutionStatus,
+          obligationStatus,
         }),
     }),
 );
@@ -287,6 +307,46 @@ const Revise = endpoint(
   },
 );
 
+const GetInvitationLink = endpoint(
+  "/agreements/link",
+  ({ session, agreement, user, token }) =>
+    receive({ session, agreement })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(
+          Agreeing._canView({ agreement, user }).is({ agreement }),
+          Agreeing._get({ agreement }).is({ status: "PENDING" }),
+          Linking._activeForItem({ item: agreement }).is({ token }),
+        )
+          .then(respond({ token }))
+          .named("pending-with-active-link"),
+        where(
+          Agreeing._canView({ agreement, user }).is({ agreement }),
+          Agreeing._get({ agreement }).is({ status: "PENDING" }),
+          no(Linking._activeForItem({ item: agreement })),
+        )
+          .then(respond({ error: "LINK_NOT_ACTIVE" }))
+          .named("pending-without-active-link"),
+        where(
+          Agreeing._canView({ agreement, user }).is({ agreement }),
+          Agreeing._get({ agreement }),
+          no(Agreeing._get({ agreement }).is({ status: "PENDING" })),
+        )
+          .then(respond({ error: "AGREEMENT_NOT_PENDING" }))
+          .named("not-pending"),
+        where(
+          Agreeing._get({ agreement }),
+          no(Agreeing._canView({ agreement, user }).is({ agreement })),
+        )
+          .then(respond({ error: "AGREEMENT_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(Agreeing._get({ agreement })))
+          .then(respond({ error: "AGREEMENT_NOT_FOUND" }))
+          .named("missing"),
+      ),
+  { input: { required: ["session", "agreement"] } },
+);
+
 const GetInvitation = endpoint(
   "/agreements/invite",
   ({ session, token, user, agreement, initiator, initiatorUsername, counterpart, counterpartUsername, status, currentVersion, author, authorUsername, number, claim, deadline, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver, resolverUsername }) =>
@@ -379,6 +439,26 @@ const Accept = endpoint(
       .then(Authenticating.authenticate({ session }).responds({ user }))
       .then(Agreeing.accept({ user, agreement, version }).responds({}))
       .then(respond({ accepted: true })),
+  { input: { required: ["session", "agreement", "version"] } },
+);
+
+const Reject = endpoint(
+  "/agreements/reject",
+  ({ session, agreement, version, user }) =>
+    receive({ session, agreement, version })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Agreeing.reject({ user, agreement, version }).responds({}))
+      .then(respond({ rejected: true })),
+  { input: { required: ["session", "agreement", "version"] } },
+);
+
+const Withdraw = endpoint(
+  "/agreements/withdraw",
+  ({ session, agreement, version, user }) =>
+    receive({ session, agreement, version })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(Agreeing.withdraw({ user, agreement, version }).responds({}))
+      .then(respond({ withdrawn: true })),
   { input: { required: ["session", "agreement", "version"] } },
 );
 
@@ -772,7 +852,7 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 
 export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
-  Agreements: { ListAgreements, Propose, Revise, Get, GetInvitation, RevokeInvitation, Accept },
+  Agreements: { ListAgreements, Propose, Revise, GetInvitationLink, Get, GetInvitation, RevokeInvitation, Accept, Reject, Withdraw },
   Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
   Obligations: { GetObligation, GetObligationForAgreement, GetCurrentCompletion, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

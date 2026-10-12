@@ -64,7 +64,7 @@ function termsDiffer(version: VersionDocument, terms: Terms): boolean {
     version.counterpartStake !== terms.counterpartStake ||
     version.exceptions !== terms.exceptions ||
     version.resolutionRule !== terms.resolutionRule ||
-    version.resolver !== terms.resolver
+    (version.resolver ?? undefined) !== (terms.resolver ?? undefined)
   );
 }
 
@@ -184,7 +184,15 @@ export class AgreeingConcept {
     if (current.deadline.getTime() <= Date.now()) throw new RevisionExpired("The current version's deadline has passed.");
     if (!validTerms(claim, initiatorStake, counterpartStake, resolutionRule)) throw new RevisionInvalidTerms("A claim, both stakes, and a resolution rule are required.");
     if (due.getTime() <= Date.now() || Number.isNaN(due.getTime())) throw new RevisionInvalidDeadline("The agreement deadline must be in the future.");
-    const terms = { claim, deadline: due, initiatorStake, counterpartStake, exceptions, resolutionRule, resolver };
+    const terms: Terms = {
+      claim,
+      deadline: due,
+      initiatorStake,
+      counterpartStake,
+      exceptions,
+      resolutionRule,
+      ...(resolver === undefined ? {} : { resolver }),
+    };
     if (!termsDiffer(current, terms)) throw new RevisionUnchanged("A revision must change at least one term.");
 
     await ensureIndexes(this.agreements, this.versions);
@@ -254,7 +262,7 @@ export class AgreeingConcept {
         counterpartStake: record.counterpartStake,
         exceptions: record.exceptions,
         resolutionRule: record.resolutionRule,
-        ...(record.resolver === undefined ? {} : { resolver: record.resolver }),
+        ...(record.resolver == null ? {} : { resolver: record.resolver }),
       },
     ];
   }
@@ -263,7 +271,7 @@ export class AgreeingConcept {
     const record = await this.agreements.findOne({ _id: agreement });
     if (record === null) return [];
     const version = await this.versions.findOne({ _id: record.currentVersion });
-    return version?.resolver === undefined ? [] : [{ resolver: version.resolver }];
+    return version?.resolver == null ? [] : [{ resolver: version.resolver }];
   }
 
   async _canView({ agreement, user }: { agreement: string; user: string }) {

@@ -1,9 +1,17 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { MongoClient, type Db } from "mongodb";
 import {
+  CompletionInvalidEvidence,
   CompletionNotOwing,
   ObligationTrackingConcept,
+  ObligationAlreadyExists,
+  ObligationInvalidDescription,
+  ObligationSamePerson,
+  ReceiptDisputeNotCurrent,
+  ReceiptDisputeNotRecipient,
   ReceiptDisputeEvidenceRequired,
+  ReceiptNotCurrent,
+  ReceiptNotRecipient,
 } from "../../src/concepts/ObligationTracking.ts";
 
 const configuredUrl = process.env.MONGODB_URL;
@@ -47,5 +55,79 @@ describe("ObligationTracking", () => {
     await expect(tracking._current({ obligation: created.obligation })).resolves.toMatchObject([{ report: report.report, disputeEvidence: "The item was not delivered." }]);
     const revised = await tracking.reportCompletion({ user: "wyatt", obligation: created.obligation, evidence: "Delivery receipt" });
     await expect(tracking._hasEvidence({ report: revised.report })).resolves.toEqual([{ report: revised.report }]);
+  });
+
+  test("validates each obligation and permits only one per source item", async () => {
+    const tracking = new ObligationTrackingConcept(database);
+
+    await expect(
+      tracking.record({ item: "same-person", owing: "wyatt", recipient: "wyatt", description: "lunch" }),
+    ).rejects.toThrow(ObligationSamePerson);
+    await expect(
+      tracking.record({ item: "blank-description", owing: "wyatt", recipient: "alex", description: "  " }),
+    ).rejects.toThrow(ObligationInvalidDescription);
+
+    await tracking.record({ item: "unique-item", owing: "wyatt", recipient: "alex", description: "lunch" });
+    await expect(
+      tracking.record({ item: "unique-item", owing: "alex", recipient: "wyatt", description: "coffee" }),
+    ).rejects.toThrow(ObligationAlreadyExists);
+  });
+
+  test("restricts completion review to the recipient and the current report", async () => {
+    const tracking = new ObligationTrackingConcept(database);
+    const created = await tracking.record({
+      item: "agreement-review",
+      owing: "wyatt",
+      recipient: "alex",
+      description: "lunch",
+    });
+
+    await expect(
+      tracking.reportCompletion({ user: "wyatt", obligation: created.obligation, evidence: " " }),
+    ).rejects.toThrow(CompletionInvalidEvidence);
+    const first = await tracking.reportCompletion({ user: "wyatt", obligation: created.obligation });
+    await expect(
+      tracking.confirmReceipt({ user: "wyatt", obligation: created.obligation, report: first.report }),
+    ).rejects.toThrow(ReceiptNotRecipient);
+    await expect(
+      tracking.disputeReceipt({
+        user: "wyatt",
+        obligation: created.obligation,
+        report: first.report,
+        evidence: "Not received",
+      }),
+    ).rejects.toThrow(ReceiptDisputeNotRecipient);
+
+    await tracking.disputeReceipt({
+      user: "alex",
+      obligation: created.obligation,
+      report: first.report,
+      evidence: "Not received",
+    });
+    const replacement = await tracking.reportCompletion({
+      user: "wyatt",
+      obligation: created.obligation,
+      evidence: "Receipt",
+    });
+    await expect(
+      tracking.confirmReceipt({ user: "alex", obligation: created.obligation, report: first.report }),
+    ).rejects.toThrow(ReceiptNotCurrent);
+    await expect(
+      tracking.disputeReceipt({
+        user: "alex",
+        obligation: created.obligation,
+        report: first.report,
+        evidence: "Still missing",
+      }),
+    ).rejects.toThrow(ReceiptDisputeNotCurrent);
+
+    await tracking.confirmReceipt({
+      user: "alex",
+      obligation: created.obligation,
+      report: replacement.report,
+    });
+    await expect(tracking._get({ obligation: created.obligation })).resolves.toMatchObject([
+      { status: "COMPLETE", currentReport: replacement.report, confirmedAt: expect.any(Date) },
+    ]);
   });
 });

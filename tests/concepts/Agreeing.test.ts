@@ -1,10 +1,23 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { MongoClient, type Db } from "mongodb";
 import {
+  AcceptanceExpired,
+  AcceptanceNotAuthorized,
+  AcceptanceNotPending,
   AcceptanceStaleVersion,
   AgreeingConcept,
+  ProposalInvalidDeadline,
+  ProposalInvalidTerms,
   ProposalSameParticipant,
+  RejectionNotAuthorized,
+  RejectionNotPending,
+  RejectionStaleVersion,
+  RevisionExpired,
+  RevisionNotParticipant,
   RevisionUnchanged,
+  WithdrawalNotAuthorized,
+  WithdrawalNotPending,
+  WithdrawalStaleVersion,
 } from "../../src/concepts/Agreeing.ts";
 
 const configuredUrl = process.env.MONGODB_URL;
@@ -82,6 +95,9 @@ describe("Agreeing", () => {
       number: 1,
       author: "wyatt",
     });
+    await expect(database.collection("agreeing.agreements").findOne({ _id: created.agreement })).resolves.toMatchObject({
+      acceptedAt: expect.any(Date),
+    });
   });
 
   test("revising creates a new version and rejects stale acceptance", async () => {
@@ -109,11 +125,124 @@ describe("Agreeing", () => {
     ).rejects.toThrow(RevisionUnchanged);
   });
 
+  test("revises resolver-free terms without creating a null resolver", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const { resolver: _resolver, ...resolverFreeTerms } = proposal();
+    const created = await agreeing.propose(resolverFreeTerms);
+    const revised = await agreeing.revise({
+      user: "wyatt",
+      agreement: created.agreement,
+      expectedVersion: created.version,
+      ...resolverFreeTerms,
+      claim: "Georgia Tech wins by at least seven points",
+    });
+
+    const stored = await database.collection("agreeing.versions").findOne({ _id: revised.version });
+    expect(stored).not.toHaveProperty("resolver");
+    await expect(agreeing._version({ version: revised.version })).resolves.not.toHaveProperty("0.resolver");
+    await expect(agreeing._designatedResolver({ agreement: created.agreement })).resolves.toEqual([]);
+
+    await database.collection("agreeing.versions").updateOne(
+      { _id: revised.version },
+      { $set: { resolver: null } },
+    );
+    await expect(agreeing._version({ version: revised.version })).resolves.not.toHaveProperty("0.resolver");
+    await expect(agreeing._designatedResolver({ agreement: created.agreement })).resolves.toEqual([]);
+  });
+
   test("refuses proposals with the same participant twice", async () => {
     const agreeing = new AgreeingConcept(database);
     await expect(agreeing.propose(proposal({ counterpart: "wyatt" }))).rejects.toThrow(
       ProposalSameParticipant,
     );
+  });
+
+  test("validates required terms and the future deadline", async () => {
+    const agreeing = new AgreeingConcept(database);
+
+    await expect(agreeing.propose(proposal({ claim: "  " }))).rejects.toThrow(
+      ProposalInvalidTerms,
+    );
+    await expect(
+      agreeing.propose(proposal({ deadline: new Date(Date.now() - 1_000) })),
+    ).rejects.toThrow(ProposalInvalidDeadline);
+    await expect(database.collection("agreeing.agreements").countDocuments()).resolves.toBe(0);
+  });
+
+  test("restricts acceptance and revision to the current eligible participant and deadline", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const created = await agreeing.propose(proposal());
+
+    await expect(
+      agreeing.accept({ user: "wyatt", agreement: created.agreement, version: created.version }),
+    ).rejects.toThrow(AcceptanceNotAuthorized);
+    await expect(
+      agreeing.revise({
+        user: "casey",
+        agreement: created.agreement,
+        expectedVersion: created.version,
+        ...proposal({ claim: "A different claim" }),
+      }),
+    ).rejects.toThrow(RevisionNotParticipant);
+
+    await database.collection("agreeing.versions").updateOne(
+      { _id: created.version },
+      { $set: { deadline: new Date(Date.now() - 1_000) } },
+    );
+    await expect(
+      agreeing.accept({ user: "alex", agreement: created.agreement, version: created.version }),
+    ).rejects.toThrow(AcceptanceExpired);
+    await expect(
+      agreeing.revise({
+        user: "alex",
+        agreement: created.agreement,
+        expectedVersion: created.version,
+        ...proposal({ claim: "A different claim" }),
+      }),
+    ).rejects.toThrow(RevisionExpired);
+  });
+
+  test("allows only the reviewer to reject the current pending version", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const created = await agreeing.propose(proposal());
+
+    await expect(
+      agreeing.reject({ user: "wyatt", agreement: created.agreement, version: created.version }),
+    ).rejects.toThrow(RejectionNotAuthorized);
+    await expect(
+      agreeing.reject({ user: "alex", agreement: created.agreement, version: "stale-version" }),
+    ).rejects.toThrow(RejectionStaleVersion);
+
+    await agreeing.reject({ user: "alex", agreement: created.agreement, version: created.version });
+    await expect(agreeing._get({ agreement: created.agreement })).resolves.toMatchObject([
+      { status: "REJECTED", currentVersion: created.version },
+    ]);
+    await expect(
+      agreeing.accept({ user: "alex", agreement: created.agreement, version: created.version }),
+    ).rejects.toThrow(AcceptanceNotPending);
+    await expect(
+      agreeing.reject({ user: "alex", agreement: created.agreement, version: created.version }),
+    ).rejects.toThrow(RejectionNotPending);
+  });
+
+  test("allows only the current version author to withdraw a pending proposal", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const created = await agreeing.propose(proposal());
+
+    await expect(
+      agreeing.withdraw({ user: "alex", agreement: created.agreement, version: created.version }),
+    ).rejects.toThrow(WithdrawalNotAuthorized);
+    await expect(
+      agreeing.withdraw({ user: "wyatt", agreement: created.agreement, version: "stale-version" }),
+    ).rejects.toThrow(WithdrawalStaleVersion);
+
+    await agreeing.withdraw({ user: "wyatt", agreement: created.agreement, version: created.version });
+    await expect(agreeing._get({ agreement: created.agreement })).resolves.toMatchObject([
+      { status: "WITHDRAWN", currentVersion: created.version },
+    ]);
+    await expect(
+      agreeing.withdraw({ user: "wyatt", agreement: created.agreement, version: created.version }),
+    ).rejects.toThrow(WithdrawalNotPending);
   });
 
   test("limits agreement views to participants and the resolver after acceptance", async () => {

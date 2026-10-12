@@ -39,6 +39,9 @@ describe("Linking", () => {
     expect(first.token).toMatch(/^[0-9a-f-]{36}$/);
     expect(second.link).not.toBe(first.link);
     expect(second.token).not.toBe(first.token);
+    const active = await linking._activeForItem({ item: "agreement-1" });
+    expect(active).toHaveLength(1);
+    expect([first.token, second.token]).toContain(active[0]?.token);
     await expect(linking.resolve({ token: first.token })).resolves.toEqual({
       item: "agreement-1",
     });

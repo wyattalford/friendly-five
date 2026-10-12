@@ -116,7 +116,10 @@ describe("agreement invitation boundary", () => {
             initiatorUsername: "wyatt",
             counterpart: expect.any(String),
             counterpartUsername: "alex",
+            author: expect.any(String),
             status: "PENDING",
+            resolutionStatus: null,
+            obligationStatus: null,
             version: invitation.version,
             claim: terms.claim,
             deadline: terms.deadline,
@@ -178,6 +181,16 @@ describe("agreement invitation boundary", () => {
     const revision = (await revised.json()) as { agreement: string; version: string };
     expect(revision.agreement).toBe(invitation.agreement);
     expect(revision.version).not.toBe(invitation.version);
+
+    const revisedDashboardResponse = await handler(post("/agreements/list", {}, wyattCookie));
+    expect(revisedDashboardResponse.status).toBe(200);
+    const revisedDashboard = await revisedDashboardResponse.json() as {
+      dashboard: { agreements: Array<{ agreement: string; author: string; counterpart: string }> };
+    };
+    const revisedSummary = revisedDashboard.dashboard.agreements.find(
+      (entry) => entry.agreement === invitation.agreement,
+    );
+    expect(revisedSummary?.author).toBe(revisedSummary?.counterpart);
 
     const invited = await handler(
       post("/agreements/invite", { token: invitation.token }, alexCookie),
@@ -241,6 +254,8 @@ describe("agreement invitation boundary", () => {
           {
             agreement: invitation.agreement,
             status: "ACCEPTED",
+            resolutionStatus: "OPEN",
+            obligationStatus: null,
             claim: "Georgia Tech wins by at least seven points",
           },
         ],
@@ -273,5 +288,188 @@ describe("agreement invitation boundary", () => {
     );
     expect(afterRevocation.status).toBe(404);
     expect(await afterRevocation.json()).toEqual({ error: "NOT_FOUND" });
+  });
+
+  test("lets both participants revise resolver-free terms and retrieve the pending link", async () => {
+    const { application, gateway } = createFriendlyFive(database);
+    const handler = createHttpHandler({ application, gateway, policy });
+
+    async function registerAndSignIn(username: string): Promise<string> {
+      expect((await handler(post("/auth/register", { username, password: "safe password" }))).status).toBe(200);
+      const signedIn = await handler(post("/auth/sign-in", { username, password: "safe password" }));
+      expect(signedIn.status).toBe(200);
+      const cookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
+      if (cookie === undefined) throw new Error(`Expected a session cookie for ${username}.`);
+      return cookie;
+    }
+
+    const wyattCookie = await registerAndSignIn("wyatt");
+    const alexCookie = await registerAndSignIn("alex");
+    const morganCookie = await registerAndSignIn("morgan");
+    const deadline = new Date(Date.now() + 60_000).toISOString();
+    const terms = {
+      counterpartUsername: "alex",
+      claim: "Wyatt wins the ping-pong match",
+      deadline,
+      initiatorStake: "dinner",
+      counterpartStake: "lunch",
+      exceptions: "",
+      resolutionRule: "Use the final score",
+      resolverUsername: "",
+    };
+
+    const proposedResponse = await handler(post("/agreements/propose", terms, wyattCookie));
+    expect(proposedResponse.status).toBe(200);
+    const proposed = (await proposedResponse.json()) as {
+      agreement: string;
+      version: string;
+      token: string;
+    };
+
+    for (const cookie of [wyattCookie, alexCookie]) {
+      const linkResponse = await handler(
+        post("/agreements/link", { agreement: proposed.agreement }, cookie),
+      );
+      expect(linkResponse.status).toBe(200);
+      expect(await linkResponse.json()).toEqual({ token: proposed.token });
+    }
+    const unauthorizedLink = await handler(
+      post("/agreements/link", { agreement: proposed.agreement }, morganCookie),
+    );
+    expect(unauthorizedLink.status).toBe(403);
+
+    const initiatorRevisionResponse = await handler(
+      post(
+        "/agreements/revise",
+        {
+          ...terms,
+          agreement: proposed.agreement,
+          expectedVersion: proposed.version,
+          claim: "Wyatt wins by at least three points",
+        },
+        wyattCookie,
+      ),
+    );
+    expect(initiatorRevisionResponse.status).toBe(200);
+    const initiatorRevision = (await initiatorRevisionResponse.json()) as { version: string };
+
+    const counterpartRevisionResponse = await handler(
+      post(
+        "/agreements/revise",
+        {
+          ...terms,
+          agreement: proposed.agreement,
+          expectedVersion: initiatorRevision.version,
+          claim: "Wyatt wins by at least five points",
+        },
+        alexCookie,
+      ),
+    );
+    expect(counterpartRevisionResponse.status).toBe(200);
+    const counterpartRevision = (await counterpartRevisionResponse.json()) as { version: string };
+
+    const invitationResponse = await handler(
+      post("/agreements/invite", { token: proposed.token }, wyattCookie),
+    );
+    expect(invitationResponse.status).toBe(200);
+    const invitation = await invitationResponse.json() as Record<string, unknown>;
+    expect(invitation).toMatchObject({
+      agreement: proposed.agreement,
+      version: counterpartRevision.version,
+      number: 3,
+      authorUsername: "alex",
+      claim: "Wyatt wins by at least five points",
+      status: "PENDING",
+    });
+    expect(invitation).not.toHaveProperty("resolver");
+    expect(invitation).not.toHaveProperty("resolverUsername");
+  });
+
+  test("lets the reviewer reject and the current author withdraw pending proposals", async () => {
+    const { application, gateway } = createFriendlyFive(database);
+    const handler = createHttpHandler({ application, gateway, policy });
+
+    async function registerAndSignIn(username: string): Promise<string> {
+      expect((await handler(post("/auth/register", { username, password: "safe password" }))).status).toBe(200);
+      const signedIn = await handler(post("/auth/sign-in", { username, password: "safe password" }));
+      expect(signedIn.status).toBe(200);
+      const cookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
+      if (cookie === undefined) throw new Error(`Expected a session cookie for ${username}.`);
+      return cookie;
+    }
+
+    const wyattCookie = await registerAndSignIn("wyatt");
+    const alexCookie = await registerAndSignIn("alex");
+    const terms = {
+      counterpartUsername: "alex",
+      resolverUsername: "",
+      deadline: new Date(Date.now() + 60_000).toISOString(),
+      initiatorStake: "Wyatt buys lunch",
+      counterpartStake: "Alex buys lunch",
+      exceptions: "",
+      resolutionRule: "Use the official result",
+    };
+
+    const rejectedResponse = await handler(post(
+      "/agreements/propose",
+      { ...terms, claim: "Rejected scenario" },
+      wyattCookie,
+    ));
+    expect(rejectedResponse.status).toBe(200);
+    const rejectedProposal = (await rejectedResponse.json()) as { agreement: string; version: string };
+
+    const authorRejection = await handler(post(
+      "/agreements/reject",
+      { agreement: rejectedProposal.agreement, version: rejectedProposal.version },
+      wyattCookie,
+    ));
+    expect(authorRejection.status).toBe(403);
+    expect(await authorRejection.json()).toEqual({ error: "FORBIDDEN" });
+    const rejected = await handler(post(
+      "/agreements/reject",
+      { agreement: rejectedProposal.agreement, version: rejectedProposal.version },
+      alexCookie,
+    ));
+    expect(rejected.status).toBe(200);
+    expect(await rejected.json()).toEqual({ rejected: true });
+    const rejectedDetails = await handler(post(
+      "/agreements/get",
+      { agreement: rejectedProposal.agreement },
+      wyattCookie,
+    ));
+    expect(rejectedDetails.status).toBe(200);
+    expect(await rejectedDetails.json()).toMatchObject({ status: "REJECTED" });
+
+    const withdrawnResponse = await handler(post(
+      "/agreements/propose",
+      { ...terms, claim: "Withdrawn scenario" },
+      wyattCookie,
+    ));
+    expect(withdrawnResponse.status).toBe(200);
+    const withdrawnProposal = (await withdrawnResponse.json()) as { agreement: string; version: string };
+
+    const reviewerWithdrawal = await handler(post(
+      "/agreements/withdraw",
+      { agreement: withdrawnProposal.agreement, version: withdrawnProposal.version },
+      alexCookie,
+    ));
+    expect(reviewerWithdrawal.status).toBe(403);
+    expect(await reviewerWithdrawal.json()).toEqual({ error: "FORBIDDEN" });
+    const withdrawn = await handler(post(
+      "/agreements/withdraw",
+      { agreement: withdrawnProposal.agreement, version: withdrawnProposal.version },
+      wyattCookie,
+    ));
+    expect(withdrawn.status).toBe(200);
+    expect(await withdrawn.json()).toEqual({ withdrawn: true });
+    const withdrawnDetails = await handler(post(
+      "/agreements/get",
+      { agreement: withdrawnProposal.agreement },
+      alexCookie,
+    ));
+    expect(withdrawnDetails.status).toBe(200);
+    expect(await withdrawnDetails.json()).toMatchObject({ status: "WITHDRAWN" });
+
+    expect(await database.collection("resolving.cases").countDocuments()).toBe(0);
   });
 });
