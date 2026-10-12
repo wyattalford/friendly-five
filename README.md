@@ -30,6 +30,8 @@ the terms both participants accepted.
 The maintained [core user journey](design/core-user-journey.md) demonstrates the
 complete path from an empty database through registration, agreement,
 disagreement, resolver decision, and confirmed obligation completion.
+A narrated walkthrough of this journey is available in the
+[P2 demo recording](https://drive.google.com/file/d/1LJoGqUKwzpq3sLEaH6UJ4NyfNUX2rSIS/view?usp=sharing).
 
 ## Architecture
 
