@@ -2,10 +2,14 @@
 import { computed, inject, onMounted, onUnmounted, ref, watch, type Ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api } from "../api.ts";
+import AgreementHistory from "../components/AgreementHistory.vue";
 
 type Outcome = "TRUE" | "FALSE" | "VOID";
 type AgreementResult = Awaited<ReturnType<typeof api.agreements.get>>;
 type AgreementDetails = Exclude<AgreementResult, { error: unknown }>;
+type AgreementHistoryResult = Awaited<ReturnType<typeof api.agreements.history>>;
+type AgreementHistoryDetails = Exclude<AgreementHistoryResult, { error: unknown }>;
+type AgreementVersion = AgreementHistoryDetails["history"]["versions"][number];
 type ResolutionResult = Awaited<ReturnType<typeof api.resolutions["by-agreement"]>>;
 type ResolutionDetails = Exclude<ResolutionResult, { error: unknown }>;
 type ReportResult = Awaited<ReturnType<typeof api.resolutions.current>>;
@@ -23,6 +27,7 @@ const currentUserId = inject<Readonly<Ref<string>>>("currentUserId");
 if (currentUserId === undefined) throw new Error("Resolution view requires authentication context.");
 
 const agreement = ref<AgreementDetails | null>(null);
+const agreementHistory = ref<AgreementVersion[]>([]);
 const resolution = ref<ResolutionDetails | null>(null);
 const currentReport = ref<ReportDetails | null>(null);
 const reportHistory = ref<HistoryReport[]>([]);
@@ -40,6 +45,7 @@ const decisionEvidence = ref("");
 const completionEvidence = ref("");
 const completionDisputeEvidence = ref("");
 const currentTime = ref(Date.now());
+const serverClockOffsetMs = ref(0);
 let cutoffTimer: ReturnType<typeof setTimeout> | undefined;
 
 const agreementId = computed(() => String(route.params.agreement ?? ""));
@@ -140,13 +146,13 @@ function clearCutoffTimer(): void {
 
 function scheduleCutoffUpdate(): void {
   clearCutoffTimer();
-  currentTime.value = Date.now();
+  currentTime.value = Date.now() + serverClockOffsetMs.value;
   if (resolution.value === null) return;
 
   const remaining = new Date(resolution.value.cutoff).getTime() - currentTime.value;
   if (remaining <= 0) return;
   cutoffTimer = setTimeout(() => {
-    currentTime.value = Date.now();
+    currentTime.value = Date.now() + serverClockOffsetMs.value;
     cutoffTimer = undefined;
   }, remaining + 25);
 }
@@ -196,6 +202,7 @@ async function loadPage(showLoading = true): Promise<void> {
     const agreementResult = await api.agreements.get({ agreement: agreementId.value });
     if ("error" in agreementResult) {
       agreement.value = null;
+      agreementHistory.value = [];
       resolution.value = null;
       currentReport.value = null;
       reportHistory.value = [];
@@ -206,9 +213,19 @@ async function loadPage(showLoading = true): Promise<void> {
     }
     agreement.value = agreementResult;
 
+    const agreementHistoryResult = await api.agreements.history({ agreement: agreementId.value });
+    if ("error" in agreementHistoryResult) {
+      agreementHistory.value = [];
+      error.value = requestError(agreementHistoryResult.error);
+      return;
+    }
+    agreementHistory.value = agreementHistoryResult.history.versions;
+
+    const requestStartedAt = Date.now();
     const resolutionResult = await api.resolutions["by-agreement"]({
       agreement: agreementId.value,
     });
+    const responseReceivedAt = Date.now();
     if ("error" in resolutionResult) {
       resolution.value = null;
       currentReport.value = null;
@@ -219,6 +236,9 @@ async function loadPage(showLoading = true): Promise<void> {
       return;
     }
     resolution.value = resolutionResult;
+    serverClockOffsetMs.value =
+      new Date(resolutionResult.serverTime).getTime() -
+      (requestStartedAt + responseReceivedAt) / 2;
     scheduleCutoffUpdate();
 
     const historyResult = await api.resolutions.history({ case: resolutionResult.case });
@@ -264,6 +284,13 @@ async function submitReport(): Promise<void> {
       ...(evidence === "" ? {} : { evidence }),
     });
     if ("error" in result) {
+      if (result.error === "INVALID_REQUEST") {
+        await loadPage(false);
+        if (!cutoffPassed.value && resolution.value !== null) {
+          error.value = `Reporting opens after ${formatDate(resolution.value.cutoff)} according to the server clock.`;
+          return;
+        }
+      }
       error.value = requestError(result.error);
       return;
     }
@@ -508,6 +535,13 @@ watch(agreementId, () => loadPage());
           </dl>
         </section>
       </div>
+
+      <AgreementHistory
+        :versions="agreementHistory"
+        :current-version="agreement.version"
+        :initiator-username="agreement.initiatorUsername"
+        :counterpart-username="agreement.counterpartUsername"
+      />
 
       <section v-if="currentReport" class="report-card">
         <p class="eyebrow">{{ resolution.status === "FINAL" ? "Final outcome" : "Current report" }}</p>

@@ -382,6 +382,9 @@ const GetInvitation = endpoint(
         )
           .then(respond({ error: "AGREEMENT_NOT_AUTHORIZED" }))
           .named("unauthorized"),
+        where(no(Agreeing._get({ agreement })))
+          .then(respond({ error: "AGREEMENT_NOT_FOUND" }))
+          .named("missing"),
       ),
   { input: { required: ["session", "token"] } },
 );
@@ -428,6 +431,83 @@ const Get = endpoint(
           .then(respond({ error: "AGREEMENT_NOT_AUTHORIZED" }))
           .named("unauthorized"),
         where(no(Agreeing._get({ agreement }))).then(respond({ error: "AGREEMENT_NOT_FOUND" })).named("missing"),
+      ),
+  { input: { required: ["session", "agreement"] } },
+);
+
+const AgreementHistory = former(
+  "the version history for (agreement)",
+  (
+    { agreement },
+    {
+      version,
+      number,
+      author,
+      authorUsername,
+      claim,
+      deadline,
+      initiatorStake,
+      counterpartStake,
+      exceptions,
+      resolutionRule,
+      resolver,
+      resolverUsername,
+    },
+  ) =>
+    form({
+      versions: each(
+        Agreeing._versions({ agreement }).is({
+          version,
+          number,
+          author,
+          claim,
+          deadline,
+          initiatorStake,
+          counterpartStake,
+          exceptions,
+          resolutionRule,
+        }),
+      )
+        .where(
+          Authenticating._username({ user: author }).is({ username: authorUsername }),
+          whether(Agreeing._version({ version }).is({ resolver })),
+          whether(Authenticating._username({ user: resolver }).is({ username: resolverUsername })),
+        )
+        .form({
+          version,
+          number,
+          author,
+          authorUsername,
+          claim,
+          deadline,
+          initiatorStake,
+          counterpartStake,
+          exceptions,
+          resolutionRule,
+          resolver,
+          resolverUsername,
+        }),
+    }),
+);
+
+const GetAgreementHistory = endpoint(
+  "/agreements/history",
+  ({ session, agreement, user }) =>
+    receive({ session, agreement })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(Agreeing._canView({ agreement, user }).is({ agreement }))
+          .then(respond({ agreement, history: AgreementHistory({ agreement }) }))
+          .named("authorized"),
+        where(
+          Agreeing._get({ agreement }),
+          no(Agreeing._canView({ agreement, user }).is({ agreement })),
+        )
+          .then(respond({ error: "AGREEMENT_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(Agreeing._get({ agreement })))
+          .then(respond({ error: "AGREEMENT_NOT_FOUND" }))
+          .named("missing"),
       ),
   { input: { required: ["session", "agreement"] } },
 );
@@ -575,7 +655,7 @@ const GetResolution = endpoint(
 
 const GetResolutionForAgreement = endpoint(
   "/resolutions/by-agreement",
-  ({ session, agreement, user, case: caseId, cutoff, resolutionRule, status }) =>
+  ({ session, agreement, user, case: caseId, cutoff, serverTime, resolutionRule, status }) =>
     receive({ session, agreement })
       .then(Authenticating.authenticate({ session }).responds({ user }))
       .then(
@@ -583,8 +663,9 @@ const GetResolutionForAgreement = endpoint(
           Resolving._byItem({ item: agreement }).is({ case: caseId }),
           Resolving._canView({ case: caseId, user }).is({ case: caseId }),
           Resolving._get({ case: caseId }).is({ cutoff, resolutionRule, status }),
+          Resolving._timing({ case: caseId }).is({ cutoff, serverTime }),
         )
-          .then(respond({ case: caseId, agreement, cutoff, resolutionRule, status }))
+          .then(respond({ case: caseId, agreement, cutoff, serverTime, resolutionRule, status }))
           .named("authorized"),
         where(
           Resolving._byItem({ item: agreement }).is({ case: caseId }),
@@ -631,6 +712,10 @@ const GetCurrentReport = endpoint(
           Resolving._get({ case: caseId }),
           no(Resolving._canView({ case: caseId, user }).is({ case: caseId })),
         ).then(respond({ error: "RESOLUTION_NOT_AUTHORIZED" })).named("unauthorized"),
+        where(
+          Resolving._canView({ case: caseId, user }).is({ case: caseId }),
+          no(Resolving._current({ case: caseId })),
+        ).then(respond({ error: "RESOLUTION_REPORT_NOT_FOUND" })).named("without-report"),
         where(no(Resolving._get({ case: caseId }))).then(respond({ error: "RESOLUTION_NOT_FOUND" })).named("missing"),
       ),
   { input: { required: ["session", "case"] } },
@@ -715,15 +800,15 @@ const DecideOutcome = endpoint(
 
 const GetObligation = endpoint(
   "/obligations/get",
-  ({ session, obligation, user, item, owing, recipient, description, status, currentReport, confirmedAt }) =>
+  ({ session, obligation, user, item, owing, recipient, description, status }) =>
     receive({ session, obligation })
       .then(Authenticating.authenticate({ session }).responds({ user }))
       .then(
-        where(ObligationTracking._get({ obligation }).is({ item, owing: user, recipient, description, status, currentReport, confirmedAt }))
-          .then(respond({ obligation, item, owing: user, recipient, description, status, currentReport, confirmedAt }))
+        where(ObligationTracking._get({ obligation }).is({ item, owing: user, recipient, description, status }))
+          .then(respond({ obligation, item, owing: user, recipient, description, status }))
           .named("owing"),
-        where(ObligationTracking._get({ obligation }).is({ item, owing, recipient: user, description, status, currentReport, confirmedAt }))
-          .then(respond({ obligation, item, owing, recipient: user, description, status, currentReport, confirmedAt }))
+        where(ObligationTracking._get({ obligation }).is({ item, owing, recipient: user, description, status }))
+          .then(respond({ obligation, item, owing, recipient: user, description, status }))
           .named("recipient"),
         where(
           ObligationTracking._get({ obligation }),
@@ -804,6 +889,12 @@ const GetCurrentCompletion = endpoint(
         )
           .then(respond({ error: "OBLIGATION_NOT_AUTHORIZED" }))
           .named("unauthorized"),
+        where(
+          ObligationTracking._canView({ obligation, user }).is({ obligation }),
+          no(ObligationTracking._current({ obligation })),
+        )
+          .then(respond({ error: "COMPLETION_REPORT_NOT_FOUND" }))
+          .named("without-report"),
         where(no(ObligationTracking._get({ obligation })))
           .then(respond({ error: "OBLIGATION_NOT_FOUND" }))
           .named("missing"),
@@ -901,7 +992,7 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 
 export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
-  Agreements: { ListAgreements, Propose, Revise, GetInvitationLink, Get, GetInvitation, RevokeInvitation, Accept, Reject, Withdraw },
+  Agreements: { ListAgreements, Propose, Revise, GetInvitationLink, Get, GetInvitation, GetAgreementHistory, RevokeInvitation, Accept, Reject, Withdraw },
   Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, GetResolutionHistory, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
   Obligations: { GetObligation, GetObligationForAgreement, GetCurrentCompletion, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

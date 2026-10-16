@@ -383,6 +383,48 @@ describe("agreement invitation boundary", () => {
     });
     expect(invitation).not.toHaveProperty("resolver");
     expect(invitation).not.toHaveProperty("resolverUsername");
+
+    const historyResponse = await handler(
+      post("/agreements/history", { agreement: proposed.agreement }, alexCookie),
+    );
+    expect(historyResponse.status).toBe(200);
+    expect(await historyResponse.json()).toMatchObject({
+      agreement: proposed.agreement,
+      history: {
+        versions: [
+          {
+            version: proposed.version,
+            number: 1,
+            authorUsername: "wyatt",
+            claim: "Wyatt wins the ping-pong match",
+            resolver: null,
+            resolverUsername: null,
+          },
+          {
+            version: initiatorRevision.version,
+            number: 2,
+            authorUsername: "wyatt",
+            claim: "Wyatt wins by at least three points",
+            resolver: null,
+            resolverUsername: null,
+          },
+          {
+            version: counterpartRevision.version,
+            number: 3,
+            authorUsername: "alex",
+            claim: "Wyatt wins by at least five points",
+            resolver: null,
+            resolverUsername: null,
+          },
+        ],
+      },
+    });
+
+    const outsiderHistory = await handler(
+      post("/agreements/history", { agreement: proposed.agreement }, morganCookie),
+    );
+    expect(outsiderHistory.status).toBe(403);
+    expect(await outsiderHistory.json()).toEqual({ error: "FORBIDDEN" });
   });
 
   test("lets the reviewer reject and the current author withdraw pending proposals", async () => {
@@ -471,5 +513,36 @@ describe("agreement invitation boundary", () => {
     expect(await withdrawnDetails.json()).toMatchObject({ status: "WITHDRAWN" });
 
     expect(await database.collection("resolving.cases").countDocuments()).toBe(0);
+  });
+
+  test("returns not found instead of timing out for a stale invitation target", async () => {
+    const { application, gateway } = createFriendlyFive(database);
+    const handler = createHttpHandler({ application, gateway, policy });
+
+    expect((await handler(post(
+      "/auth/register",
+      { username: "wyatt", password: "safe password" },
+    ))).status).toBe(200);
+    const signedIn = await handler(post(
+      "/auth/sign-in",
+      { username: "wyatt", password: "safe password" },
+    ));
+    const cookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
+    if (cookie === undefined) throw new Error("Expected a session cookie for wyatt.");
+    const user = await database.collection("authenticating.users").findOne({ username: "wyatt" });
+    if (user === null) throw new Error("Expected the registered user.");
+
+    const token = crypto.randomUUID();
+    await database.collection("linking.links").insertOne({
+      _id: crypto.randomUUID(),
+      owner: user._id,
+      item: "missing-agreement",
+      token,
+      status: "ACTIVE",
+    });
+
+    const response = await handler(post("/agreements/invite", { token }, cookie));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "NOT_FOUND" });
   });
 });

@@ -112,6 +112,10 @@ describe("Agreeing", () => {
     });
 
     expect(revised.version).not.toBe(created.version);
+    await expect(agreeing._versions({ agreement: created.agreement })).resolves.toMatchObject([
+      { version: created.version, number: 1, author: "wyatt" },
+      { version: revised.version, number: 2, author: "alex", claim: revisedTerms.claim },
+    ]);
     await expect(
       agreeing.accept({ user: "alex", agreement: created.agreement, version: created.version }),
     ).rejects.toThrow(AcceptanceStaleVersion);
@@ -291,5 +295,17 @@ describe("Agreeing", () => {
         currentVersion: created.version,
       },
     ]);
+  });
+
+  test("returns visible agreements in deterministic agreement-identity order", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const first = await agreeing.propose(proposal({ claim: "First visible agreement" }));
+    const second = await agreeing.propose(proposal({ claim: "Second visible agreement" }));
+
+    const visible = await agreeing._visibleTo({ user: "wyatt" });
+    const agreementIds = visible.map(({ agreement }) => agreement);
+    expect(agreementIds).toEqual(
+      [first.agreement, second.agreement].sort((left, right) => left.localeCompare(right)),
+    );
   });
 });

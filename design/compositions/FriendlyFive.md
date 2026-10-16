@@ -41,6 +41,9 @@ and an agreed resolver can read the accepted terms through
 the token and independently checks the signed-in user's agreement role before
 returning private terms. Agreement responses obtain display usernames from
 Authenticating while retaining opaque user identities for role checks. The
+[agreement version history](reaction:FriendlyFive.Agreements.GetAgreementHistory)
+returns immutable versions in chronological order to the same users who may
+review the agreement. The
 [invitation revocation](reaction:FriendlyFive.Agreements.RevokeInvitation)
 authenticates the requester before Linking enforces link ownership. The
 counterpart accepts through
@@ -56,6 +59,11 @@ private terms. The accepted-agreement reaction opens a case even when no
 resolver was designated, allowing the participants to confirm an ordinary
 outcome themselves.
 
+Agreement-based resolution lookup returns the server time observed with the
+cutoff. The browser uses that value to estimate the server clock before it
+opens outcome reporting, while Resolving remains authoritative about whether
+the cutoff has passed.
+
 ```endpoints
 FriendlyFive.Accounts.Register at /auth/register
 FriendlyFive.Accounts.SignIn at /auth/sign-in
@@ -67,6 +75,7 @@ FriendlyFive.Agreements.Revise at /agreements/revise
 FriendlyFive.Agreements.GetInvitationLink at /agreements/link
 FriendlyFive.Agreements.Get at /agreements/get
 FriendlyFive.Agreements.GetInvitation at /agreements/invite
+FriendlyFive.Agreements.GetAgreementHistory at /agreements/history
 FriendlyFive.Agreements.RevokeInvitation at /agreements/invite/revoke
 FriendlyFive.Agreements.Accept at /agreements/accept
 FriendlyFive.Agreements.Reject at /agreements/reject

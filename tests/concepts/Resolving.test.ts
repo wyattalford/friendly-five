@@ -66,6 +66,13 @@ describe("Resolving", () => {
     await expect(resolving._get({ case: opened.case })).resolves.toMatchObject([
       { item: "agreement-1", first: "wyatt", second: "alex", status: "FINAL", currentReport: submitted.report },
     ]);
+    const beforeTiming = Date.now();
+    const timing = await resolving._timing({ case: opened.case });
+    const afterTiming = Date.now();
+    expect(timing).toHaveLength(1);
+    expect(timing[0]?.cutoff).toBeInstanceOf(Date);
+    expect(timing[0]?.serverTime.getTime()).toBeGreaterThanOrEqual(beforeTiming);
+    expect(timing[0]?.serverTime.getTime()).toBeLessThanOrEqual(afterTiming);
     await expect(resolving._current({ case: opened.case })).resolves.toMatchObject([
       { report: submitted.report, author: "wyatt", outcome: "TRUE" },
     ]);

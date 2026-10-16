@@ -154,6 +154,9 @@ _canView(case: Case, user: User) : optional (case: Case)
 _get(case: Case) : optional (item: Item, first: User, second: User, cutoff: DateTime, resolutionRule: String, resolver?: User, status: CaseStatus, currentReport?: Report, resolvedAt?: DateTime)
   returns the case details when the case exists
 
+_timing(case: Case) : optional (cutoff: DateTime, serverTime: DateTime)
+  returns the case's cutoff and the server time observed by the query when the case exists
+
 _current(case: Case) : optional (report: Report, author: User, outcome: Outcome, evidence?: String, reportedAt: DateTime, disputedBy?: User, disputeReason?: String)
   returns the current report when the case has one
 

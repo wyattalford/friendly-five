@@ -798,6 +798,43 @@ h1 {
   padding-top: 0.2rem;
 }
 
+.history-claim {
+  margin: 0.55rem 0;
+  color: #2f3d35;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.history-details {
+  margin-top: 0.7rem;
+  border-radius: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  background: #f6f3ec;
+}
+
+.history-details summary {
+  cursor: pointer;
+  color: #285d3e;
+  font-weight: 800;
+}
+
+.history-details dl {
+  display: grid;
+  gap: 0.8rem;
+  margin: 1rem 0 0;
+}
+
+.history-details dt {
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.history-details dd {
+  margin: 0.2rem 0 0;
+  line-height: 1.45;
+}
+
 .history-entry-heading h3 {
   font-size: 1.05rem;
 }

@@ -2,10 +2,14 @@
 import { computed, inject, onMounted, ref, watch, type Ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { api } from "../api.ts";
+import AgreementHistory from "../components/AgreementHistory.vue";
 
 type InvitationResult = Awaited<ReturnType<typeof api.agreements.invite>>;
 type DirectResult = Awaited<ReturnType<typeof api.agreements.get>>;
 type AgreementDetails = Exclude<InvitationResult | DirectResult, { error: unknown }>;
+type HistoryResult = Awaited<ReturnType<typeof api.agreements.history>>;
+type HistoryDetails = Exclude<HistoryResult, { error: unknown }>;
+type AgreementVersion = HistoryDetails["history"]["versions"][number];
 
 const route = useRoute();
 const router = useRouter();
@@ -13,6 +17,7 @@ const currentUserId = inject<Readonly<Ref<string>>>("currentUserId");
 if (currentUserId === undefined) throw new Error("Agreement view requires authentication context.");
 
 const agreement = ref<AgreementDetails | null>(null);
+const agreementHistory = ref<AgreementVersion[]>([]);
 const loading = ref(true);
 const accepting = ref(false);
 const revising = ref(false);
@@ -176,6 +181,7 @@ async function loadAgreement(): Promise<void> {
   loading.value = true;
   error.value = "";
   invitationToken.value = "";
+  agreementHistory.value = [];
   linkError.value = "";
   copiedLink.value = false;
   try {
@@ -188,6 +194,13 @@ async function loadAgreement(): Promise<void> {
       return;
     }
     agreement.value = result;
+    const historyResult = await api.agreements.history({ agreement: result.agreement });
+    if ("error" in historyResult) {
+      agreementHistory.value = [];
+      error.value = invitationError(historyResult.error);
+      return;
+    }
+    agreementHistory.value = historyResult.history.versions;
     await loadInvitationLink(result);
   } catch {
     agreement.value = null;
@@ -352,6 +365,13 @@ watch([token, agreementId], loadAgreement);
           </dl>
         </section>
       </div>
+
+      <AgreementHistory
+        :versions="agreementHistory"
+        :current-version="agreement.version"
+        :initiator-username="agreement.initiatorUsername"
+        :counterpart-username="agreement.counterpartUsername"
+      />
 
       <section v-if="agreement.status === 'PENDING'" class="invitation-box pending-invitation">
         <h2>Share this proposal</h2>

@@ -156,6 +156,8 @@ _get(agreement: Agreement) : optional (initiator: User, counterpart: User, statu
   Answers the agreement and its current state, or no row when the agreement is unknown.
 _version(version: Version) : optional (agreement: Agreement, number: Number, author: User, claim: String, deadline: DateTime, initiatorStake: String, counterpartStake: String, exceptions: String, resolutionRule: String, resolver?: User)
   Answers immutable version terms, or no row when the version is unknown.
+_versions(agreement: Agreement) : many (version: Version, number: Number, author: User, claim: String, deadline: DateTime, initiatorStake: String, counterpartStake: String, exceptions: String, resolutionRule: String, resolver?: User)
+  Answers all immutable versions for the agreement in ascending version-number order, or no rows when the agreement is unknown or has no versions.
 _designatedResolver(agreement: Agreement) : many (resolver: User)
   Answers the designated resolver when one exists, or no rows when the agreement has no resolver or is unknown.
 _canView(agreement: Agreement, user: User) : optional (agreement: Agreement)

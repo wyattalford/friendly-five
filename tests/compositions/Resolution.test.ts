@@ -138,12 +138,22 @@ describe("agreement resolution boundary", () => {
       post("/resolutions/by-agreement", { agreement: proposal.agreement }, wyattCookie),
     );
     expect(resolutionLookup.status).toBe(200);
-    expect(await resolutionLookup.json()).toMatchObject({
+    const resolutionBody = await resolutionLookup.json() as Record<string, unknown>;
+    expect(resolutionBody).toMatchObject({
       agreement: proposal.agreement,
       case: caseRecord._id,
       status: "OPEN",
       resolutionRule: "Use the official final score",
     });
+    expect(new Date(String(resolutionBody.serverTime)).getTime()).toBeGreaterThan(
+      Date.now() - 5_000,
+    );
+
+    const missingCurrentReport = await handler(
+      post("/resolutions/current", { case: caseRecord._id }, wyattCookie),
+    );
+    expect(missingCurrentReport.status).toBe(404);
+    expect(await missingCurrentReport.json()).toEqual({ error: "NOT_FOUND" });
 
     const earlyResolverDecision = await handler(
       post(
@@ -245,6 +255,21 @@ describe("agreement resolution boundary", () => {
       description: "lunch up to $15",
       status: "DUE",
     });
+
+    const directOwingLookup = await handler(
+      post("/obligations/get", { obligation: obligationRecord._id }, wyattCookie),
+    );
+    expect(directOwingLookup.status).toBe(200);
+    expect(await directOwingLookup.json()).toMatchObject({
+      obligation: obligationRecord._id,
+      status: "DUE",
+    });
+
+    const missingCurrentCompletion = await handler(
+      post("/obligations/current", { obligation: obligationRecord._id }, alexCookie),
+    );
+    expect(missingCurrentCompletion.status).toBe(404);
+    expect(await missingCurrentCompletion.json()).toEqual({ error: "NOT_FOUND" });
 
     const firstCompletion = await handler(
       post("/obligations/report", { obligation: obligationRecord._id }, wyattCookie),

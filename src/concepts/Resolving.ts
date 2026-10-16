@@ -166,6 +166,12 @@ export class ResolvingConcept {
     }];
   }
 
+  async _timing({ case: caseId }: { case: string }) {
+    const record = await this.cases.findOne({ _id: caseId });
+    if (record === null) return [];
+    return [{ cutoff: record.cutoff, serverTime: new Date() }];
+  }
+
   async _current({ case: caseId }: { case: string }) {
     const record = await this.cases.findOne({ _id: caseId });
     if (record?.currentReport === undefined) return [];
