@@ -14,10 +14,12 @@ the terms both participants accepted.
 
 - Account registration, sign-in, session restoration, and sign-out
 - Two-party agreement proposals with versioned counterproposals
+- Chronological agreement-version history on pending and accepted agreements
 - Optional designated resolvers agreed upon as part of the terms
 - Opaque invitation links that identify an agreement without granting access
 - Acceptance, rejection, withdrawal, and pending-proposal link retrieval
 - Outcome reporting after the agreed cutoff, with optional evidence
+- Chronological outcome-report history that preserves disputed and replaced reports
 - Outcome confirmation or a dispute with a required explanation
 - Final resolver decisions for disputed outcomes
 - Automatic creation of the correct participant obligation for `TRUE` and
@@ -25,6 +27,7 @@ the terms both participants accepted.
 - Completion reporting, receipt confirmation, and completion disputes
 - A dashboard that reports the effective agreement, resolution, or obligation
   status and names the participant whose acceptance is pending
+- Responsive phone layouts for the complete agreement lifecycle
 - Persistent MongoDB state and backend authorization for every private workflow
 
 The maintained [core user journey](design/core-user-journey.md) demonstrates the
@@ -212,7 +215,10 @@ When an earlier artifact and a maintained specification differ, the files under
 
 ## P3 work
 
-P3 work includes public deployment, displaying chronological report history,
-additional mobile and accessibility review, and further loading and visual
-polish. Broader dashboard filtering and policies for long-running completion
-disputes can be evaluated without expanding the P2 core journey.
+FriendlyFive is publicly deployed at
+[friendly-five.mit-sdg.dev](https://friendly-five.mit-sdg.dev/). Agreement-version
+and outcome-report histories are implemented. Remaining P3 work includes
+production verification after each deployment, additional accessibility
+review, and further loading and visual polish. Broader dashboard
+filtering and policies for long-running completion disputes can be evaluated
+without expanding the core journey.

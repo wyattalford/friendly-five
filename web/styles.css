@@ -12,10 +12,15 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow-wrap: break-word;
 }
 
 button,
@@ -27,6 +32,11 @@ select {
 
 button {
   cursor: pointer;
+}
+
+button,
+.button-link {
+  min-height: 2.75rem;
 }
 
 button:disabled,
@@ -42,38 +52,51 @@ a {
 }
 
 .page-shell {
-  width: min(100% - 2rem, 72rem);
+  width: min(100%, 74rem);
   margin: 0 auto;
-  padding-bottom: 3rem;
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: calc(3rem + env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
 }
 
 .site-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding: 1.25rem 0;
 }
 
 .account-navigation {
   display: flex;
+  min-width: 0;
   align-items: center;
+  justify-content: flex-end;
   gap: 1rem;
 }
 
 .signed-in-name {
+  min-width: 0;
+  max-width: min(40vw, 16rem);
+  overflow: hidden;
   color: #405448;
   font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .text-button {
+  flex: none;
   border: 0;
-  padding: 0;
+  padding: 0.4rem 0.25rem;
   color: #285d3e;
   background: transparent;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .brand {
+  flex: none;
   font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -97,6 +120,7 @@ a {
   gap: clamp(2rem, 7vw, 6rem);
   align-items: center;
   min-height: calc(100vh - 8rem);
+  min-height: calc(100dvh - 8rem);
   padding: 2rem 0 5rem;
 }
 
@@ -119,6 +143,7 @@ h1 {
   font-size: clamp(2.25rem, 6vw, 4.75rem);
   line-height: 0.98;
   letter-spacing: -0.06em;
+  overflow-wrap: anywhere;
 }
 
 .intro {
@@ -391,6 +416,7 @@ h1 {
 .agreement-list-title h2 {
   margin: 0;
   font-size: 1.2rem;
+  overflow-wrap: anywhere;
 }
 
 .agreement-list-main > p {
@@ -465,6 +491,7 @@ h1 {
 
 .agreement-form fieldset {
   display: grid;
+  min-width: 0;
   gap: 1.15rem;
   margin: 0;
   padding: clamp(1.2rem, 3vw, 2rem);
@@ -485,6 +512,7 @@ h1 {
 
 .form-field {
   display: grid;
+  min-width: 0;
   gap: 0.45rem;
 }
 
@@ -837,6 +865,7 @@ h1 {
 
 .history-entry-heading h3 {
   font-size: 1.05rem;
+  overflow-wrap: anywhere;
 }
 
 .current-label {
@@ -1019,14 +1048,57 @@ h1 {
 }
 
 @media (max-width: 760px) {
+  .page-shell {
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .site-header {
+    gap: 0.65rem;
+    padding: 0.75rem 0 1rem;
+  }
+
+  .account-navigation {
+    min-width: 0;
+    gap: 0.35rem;
+  }
+
+  .signed-in-name {
+    max-width: 29vw;
+    font-size: 0.88rem;
+  }
+
+  .brand {
+    font-size: 1.12rem;
+  }
+
+  .milestone {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.68rem;
+  }
+
   .auth-layout {
     grid-template-columns: 1fr;
     gap: 0;
-    padding-top: 1rem;
+    min-height: auto;
+    padding: 0.75rem 0 2rem;
   }
 
   .auth-introduction {
-    padding-bottom: 2.5rem;
+    padding: 0.75rem 0 1.75rem;
+  }
+
+  .auth-introduction .intro {
+    margin-top: 1rem;
+  }
+
+  .page-content {
+    margin-top: 1.25rem;
+  }
+
+  .page-heading,
+  .dashboard-heading {
+    margin-bottom: 1.5rem;
   }
 
   .field-grid,
@@ -1042,20 +1114,162 @@ h1 {
     flex-direction: column;
   }
 
+  .agreement-header,
+  .dashboard-heading,
+  .obligation-header {
+    gap: 1rem;
+  }
+
+  .agreement-header .status-badge,
+  .obligation-header .status-badge {
+    align-self: flex-start;
+  }
+
   .compact-button {
     width: 100%;
   }
 
   .acceptance-card .button + .button {
     margin-left: 0;
+    margin-top: 0.65rem;
   }
 
   .dashboard-heading .button {
-    width: fit-content;
+    width: 100%;
   }
 
   .agreement-list-item {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+
+  .agreement-list-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .agreement-list-action {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    border-top: 1px solid #e4dfd5;
+    padding-top: 0.75rem;
+  }
+
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .action-row .button,
+  .acceptance-card .button,
+  .resolution-form .button,
+  .action-card > .button,
+  .fulfillment-state > .button,
+  .submit-button {
+    width: 100%;
+  }
+
+  .history-heading,
+  .history-entry-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .history-heading > span,
+  .current-label {
+    align-self: flex-start;
+  }
+
+  .history-entry {
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .history-entry:not(:last-child)::before {
+    left: 0.82rem;
+  }
+
+  .history-marker {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .history-details {
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 420px) {
+  h1,
+  .dashboard-heading h1,
+  .page-heading h1,
+  .content-card h1,
+  .agreement-header h1 {
+    font-size: 2rem;
+    line-height: 1.02;
+  }
+
+  .intro {
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  .auth-card,
+  .welcome-card,
+  .dashboard-state,
+  .agreement-list-item,
+  .agreement-form fieldset,
+  .terms-card,
+  .acceptance-card,
+  .invitation-box,
+  .report-card,
+  .history-card,
+  .action-card,
+  .obligation-card {
+    border-radius: 0.85rem;
+  }
+
+  .auth-card,
+  .dashboard-card,
+  .content-card,
+  .account-card {
+    padding: 1.15rem;
+  }
+
+  .agreement-form fieldset,
+  .terms-card,
+  .acceptance-card,
+  .invitation-box,
+  .report-card,
+  .history-card,
+  .action-card,
+  .obligation-card,
+  .dashboard-state,
+  .agreement-list-item {
+    padding: 1rem;
+  }
+
+  .account-card {
+    margin-top: 1.5rem;
+  }
+
+  .eyebrow {
+    font-size: 0.74rem;
+  }
+
+  .status-badge {
+    font-size: 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
