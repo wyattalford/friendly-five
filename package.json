@@ -22,7 +22,8 @@
   },
   "scripts": {
     "generate": "sync-engine artifacts pin",
-    "build": "bun run generate && bun run build:frontend",
+    "generate:build": "MONGODB_URL=mongodb://127.0.0.1:27017/friendlyfive_build sync-engine artifacts pin",
+    "build": "bun run generate:build && bun run build:frontend",
     "check": "sync-engine check && sync-engine artifacts check && tsc --noEmit",
     "check:design": "sync-engine check-design design/concepts/*.md design/types.md design/compositions/*.md",
     "test": "bun test",
