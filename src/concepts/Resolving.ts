@@ -182,6 +182,20 @@ export class ResolvingConcept {
     }];
   }
 
+  async _report({ report }: { report: string }) {
+    const record = await this.reports.findOne({ _id: report });
+    if (record === null) return [];
+    return [{
+      case: record.case,
+      author: record.author,
+      outcome: record.outcome,
+      ...(record.evidence === undefined ? {} : { evidence: record.evidence }),
+      reportedAt: record.reportedAt,
+      ...(record.disputedBy === undefined ? {} : { disputedBy: record.disputedBy }),
+      ...(record.disputeReason === undefined ? {} : { disputeReason: record.disputeReason }),
+    }];
+  }
+
   async _hasEvidence({ report }: { report: string }) {
     const record = await this.reports.findOne({
       _id: report,

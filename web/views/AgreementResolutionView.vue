@@ -10,6 +10,9 @@ type ResolutionResult = Awaited<ReturnType<typeof api.resolutions["by-agreement"
 type ResolutionDetails = Exclude<ResolutionResult, { error: unknown }>;
 type ReportResult = Awaited<ReturnType<typeof api.resolutions.current>>;
 type ReportDetails = Exclude<ReportResult, { error: unknown }>;
+type HistoryResult = Awaited<ReturnType<typeof api.resolutions.history>>;
+type HistoryDetails = Exclude<HistoryResult, { error: unknown }>;
+type HistoryReport = HistoryDetails["history"]["reports"][number];
 type ObligationResult = Awaited<ReturnType<typeof api.obligations["by-agreement"]>>;
 type ObligationDetails = Exclude<ObligationResult, { error: unknown }>;
 type CompletionResult = Awaited<ReturnType<typeof api.obligations.current>>;
@@ -22,6 +25,7 @@ if (currentUserId === undefined) throw new Error("Resolution view requires authe
 const agreement = ref<AgreementDetails | null>(null);
 const resolution = ref<ResolutionDetails | null>(null);
 const currentReport = ref<ReportDetails | null>(null);
+const reportHistory = ref<HistoryReport[]>([]);
 const obligation = ref<ObligationDetails | null>(null);
 const currentCompletion = ref<CompletionDetails | null>(null);
 const loading = ref(true);
@@ -194,6 +198,7 @@ async function loadPage(showLoading = true): Promise<void> {
       agreement.value = null;
       resolution.value = null;
       currentReport.value = null;
+      reportHistory.value = [];
       obligation.value = null;
       currentCompletion.value = null;
       error.value = requestError(agreementResult.error);
@@ -207,6 +212,7 @@ async function loadPage(showLoading = true): Promise<void> {
     if ("error" in resolutionResult) {
       resolution.value = null;
       currentReport.value = null;
+      reportHistory.value = [];
       obligation.value = null;
       currentCompletion.value = null;
       error.value = requestError(resolutionResult.error);
@@ -214,6 +220,14 @@ async function loadPage(showLoading = true): Promise<void> {
     }
     resolution.value = resolutionResult;
     scheduleCutoffUpdate();
+
+    const historyResult = await api.resolutions.history({ case: resolutionResult.case });
+    if ("error" in historyResult) {
+      reportHistory.value = [];
+      error.value = requestError(historyResult.error);
+      return;
+    }
+    reportHistory.value = historyResult.history.reports;
 
     if (resolutionResult.status === "OPEN") {
       currentReport.value = null;
@@ -509,6 +523,40 @@ watch(agreementId, () => loadPage());
           <strong>Disputed by {{ usernameFor(currentReport.disputedBy) }}</strong>
           <p>{{ currentReport.disputeReason }}</p>
         </div>
+      </section>
+
+      <section v-if="reportHistory.length > 0" class="history-card" aria-labelledby="outcome-history-heading">
+        <div class="history-heading">
+          <div>
+            <p class="eyebrow">Record of changes</p>
+            <h2 id="outcome-history-heading">Outcome history</h2>
+          </div>
+          <span>{{ reportHistory.length }} {{ reportHistory.length === 1 ? "report" : "reports" }}</span>
+        </div>
+        <ol class="history-list">
+          <li v-for="(report, index) in reportHistory" :key="report.report" class="history-entry">
+            <div class="history-marker" aria-hidden="true">{{ index + 1 }}</div>
+            <div class="history-content">
+              <div class="history-entry-heading">
+                <h3>{{ outcomeLabel(report.outcome) }}</h3>
+                <span v-if="report.report === currentReport?.report" class="current-label">
+                  {{ resolution.status === "FINAL" ? "Final" : "Current" }}
+                </span>
+              </div>
+              <p class="report-meta">
+                Reported by {{ usernameFor(report.author) }} on {{ formatDate(report.reportedAt) }}
+              </p>
+              <div v-if="report.evidence" class="evidence-block">
+                <strong>Evidence or explanation</strong>
+                <p>{{ report.evidence }}</p>
+              </div>
+              <div v-if="report.disputeReason" class="dispute-block">
+                <strong>Disputed by {{ usernameFor(report.disputedBy ?? "") }}</strong>
+                <p>{{ report.disputeReason }}</p>
+              </div>
+            </div>
+          </li>
+        </ol>
       </section>
 
       <p v-if="notice" class="notice notice-success" role="status">{{ notice }}</p>

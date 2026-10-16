@@ -636,6 +636,43 @@ const GetCurrentReport = endpoint(
   { input: { required: ["session", "case"] } },
 );
 
+const ResolutionHistory = former(
+  "the outcome report history for (case)",
+  ({ case: caseId }, { report, author, outcome, evidence, reportedAt, disputedBy, disputeReason }) =>
+    form({
+      reports: each(
+        Resolving._reports({ case: caseId }).is({ report, author, outcome, reportedAt }),
+      )
+        .where(
+          whether(Resolving._report({ report }).is({ evidence })),
+          whether(Resolving._report({ report }).is({ disputedBy, disputeReason })),
+        )
+        .form({ report, author, outcome, evidence, reportedAt, disputedBy, disputeReason }),
+    }),
+);
+
+const GetResolutionHistory = endpoint(
+  "/resolutions/history",
+  ({ session, case: caseId, user }) =>
+    receive({ session, case: caseId })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(Resolving._canView({ case: caseId, user }).is({ case: caseId }))
+          .then(respond({ case: caseId, history: ResolutionHistory({ case: caseId }) }))
+          .named("authorized"),
+        where(
+          Resolving._get({ case: caseId }),
+          no(Resolving._canView({ case: caseId, user }).is({ case: caseId })),
+        )
+          .then(respond({ error: "RESOLUTION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(Resolving._get({ case: caseId })))
+          .then(respond({ error: "RESOLUTION_NOT_FOUND" }))
+          .named("missing"),
+      ),
+  { input: { required: ["session", "case"] } },
+);
+
 const ReportOutcome = endpoint(
   "/resolutions/report",
   ({ session, case: caseId, outcome, evidence, user, report }) =>
@@ -865,6 +902,6 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
   Agreements: { ListAgreements, Propose, Revise, GetInvitationLink, Get, GetInvitation, RevokeInvitation, Accept, Reject, Withdraw },
-  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
+  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, GetResolutionHistory, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
   Obligations: { GetObligation, GetObligationForAgreement, GetCurrentCompletion, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

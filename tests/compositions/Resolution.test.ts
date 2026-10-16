@@ -490,6 +490,43 @@ describe("agreement resolution boundary", () => {
       { case: replacementScenario.resolutionCase._id, report: replacement.report },
       wyattCookie,
     ))).status).toBe(200);
+    const historyResponse = await handler(post(
+      "/resolutions/history",
+      { case: replacementScenario.resolutionCase._id },
+      wyattCookie,
+    ));
+    expect(historyResponse.status).toBe(200);
+    expect(await historyResponse.json()).toMatchObject({
+      case: replacementScenario.resolutionCase._id,
+      history: {
+        reports: [
+          {
+            report: first.report,
+            outcome: "TRUE",
+            evidence: null,
+            disputedBy: expect.any(String),
+            disputeReason: "The official result says the claim is false.",
+          },
+          {
+            report: replacement.report,
+            outcome: "FALSE",
+            evidence: "Official result",
+            disputedBy: null,
+            disputeReason: null,
+          },
+        ],
+      },
+    });
+
+    const outsiderCookie = await registerAndSignIn("casey");
+    const outsiderHistory = await handler(post(
+      "/resolutions/history",
+      { case: replacementScenario.resolutionCase._id },
+      outsiderCookie,
+    ));
+    expect(outsiderHistory.status).toBe(403);
+    expect(await outsiderHistory.json()).toEqual({ error: "FORBIDDEN" });
+
     await expect(
       database.collection("obligationTracking.obligations").findOne({ item: replacementScenario.proposal.agreement }),
     ).resolves.toMatchObject({

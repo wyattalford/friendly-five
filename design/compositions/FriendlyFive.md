@@ -74,6 +74,7 @@ FriendlyFive.Agreements.Withdraw at /agreements/withdraw
 FriendlyFive.Outcomes.GetResolution at /resolutions/get
 FriendlyFive.Outcomes.GetResolutionForAgreement at /resolutions/by-agreement
 FriendlyFive.Outcomes.GetCurrentReport at /resolutions/current
+FriendlyFive.Outcomes.GetResolutionHistory at /resolutions/history
 FriendlyFive.Outcomes.ReportOutcome at /resolutions/report
 FriendlyFive.Outcomes.ConfirmOutcome at /resolutions/confirm
 FriendlyFive.Outcomes.DisputeOutcome at /resolutions/dispute
@@ -97,6 +98,7 @@ NonBlank(value: String) : Boolean
 The resolution endpoints are [case review](reaction:FriendlyFive.Outcomes.GetResolution),
 [agreement-based case lookup](reaction:FriendlyFive.Outcomes.GetResolutionForAgreement),
 [current report review](reaction:FriendlyFive.Outcomes.GetCurrentReport),
+[outcome report history](reaction:FriendlyFive.Outcomes.GetResolutionHistory),
 [outcome reporting](reaction:FriendlyFive.Outcomes.ReportOutcome),
 [outcome confirmation](reaction:FriendlyFive.Outcomes.ConfirmOutcome),
 [outcome disputes](reaction:FriendlyFive.Outcomes.DisputeOutcome), and

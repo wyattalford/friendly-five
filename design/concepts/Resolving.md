@@ -157,6 +157,9 @@ _get(case: Case) : optional (item: Item, first: User, second: User, cutoff: Date
 _current(case: Case) : optional (report: Report, author: User, outcome: Outcome, evidence?: String, reportedAt: DateTime, disputedBy?: User, disputeReason?: String)
   returns the current report when the case has one
 
+_report(report: Report) : optional (case: Case, author: User, outcome: Outcome, evidence?: String, reportedAt: DateTime, disputedBy?: User, disputeReason?: String)
+  returns the report details when the report exists
+
 _hasEvidence(report: Report) : optional (report: Report)
   returns the report when it exists and has nonblank evidence
 
