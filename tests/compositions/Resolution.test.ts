@@ -11,6 +11,7 @@ const testUrl = new URL(configuredUrl);
 testUrl.pathname = "/friendlyfive_resolution_composition_test";
 const client = new MongoClient(testUrl.toString());
 let database: Db;
+const tinyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X3LsAAAAAElFTkSuQmCC";
 
 async function resetDatabase(): Promise<void> {
   if (database.databaseName !== "friendlyfive_resolution_composition_test") {
@@ -166,7 +167,16 @@ describe("agreement resolution boundary", () => {
     expect(await earlyResolverDecision.json()).toEqual({ error: "INVALID_REQUEST" });
 
     const reported = await handler(
-      post("/resolutions/report", { case: caseRecord._id, outcome: "TRUE" }, wyattCookie),
+      post(
+        "/resolutions/report",
+        {
+          case: caseRecord._id,
+          outcome: "TRUE",
+          evidenceImage: tinyPng,
+          evidenceImageName: "score.png",
+        },
+        wyattCookie,
+      ),
     );
     expect(reported.status).toBe(200);
     const report = (await reported.json()) as { report: string };
@@ -178,11 +188,36 @@ describe("agreement resolution boundary", () => {
           case: caseRecord._id,
           report: report.report,
           reason: "The final margin was exactly seven points, not more than seven.",
+          evidenceImage: tinyPng,
+          evidenceImageName: "correct-score.png",
         },
         alexCookie,
       ),
     );
     expect(disputed.status).toBe(200);
+
+    const outsiderImages = await handler(
+      post("/resolutions/images", { case: caseRecord._id }, outsiderCookie),
+    );
+    expect(outsiderImages.status).toBe(403);
+    expect(await outsiderImages.json()).toEqual({ error: "FORBIDDEN" });
+
+    const privateImages = await handler(
+      post("/resolutions/images", { case: caseRecord._id }, morganCookie),
+    );
+    expect(privateImages.status).toBe(200);
+    expect(await privateImages.json()).toMatchObject({
+      case: caseRecord._id,
+      images: {
+        attachments: [{
+          report: report.report,
+          evidenceImage: tinyPng,
+          evidenceImageName: "score.png",
+          disputeImage: tinyPng,
+          disputeImageName: "correct-score.png",
+        }],
+      },
+    });
 
     const resolverReview = await handler(
       post("/resolutions/current", { case: caseRecord._id }, morganCookie),
@@ -316,6 +351,8 @@ describe("agreement resolution boundary", () => {
         {
           obligation: obligationRecord._id,
           evidence: "Restaurant receipt for the delivered lunch.",
+          evidenceImage: tinyPng,
+          evidenceImageName: "restaurant-receipt.png",
         },
         wyattCookie,
       ),
@@ -331,6 +368,27 @@ describe("agreement resolution boundary", () => {
     expect(await revisedRecipientReview.json()).toMatchObject({
       report: revisedCompletionReport.report,
       evidence: "Restaurant receipt for the delivered lunch.",
+    });
+
+    const outsiderCompletionImages = await handler(
+      post("/obligations/images", { obligation: obligationRecord._id }, outsiderCookie),
+    );
+    expect(outsiderCompletionImages.status).toBe(403);
+    expect(await outsiderCompletionImages.json()).toEqual({ error: "FORBIDDEN" });
+
+    const completionImages = await handler(
+      post("/obligations/images", { obligation: obligationRecord._id }, alexCookie),
+    );
+    expect(completionImages.status).toBe(200);
+    expect(await completionImages.json()).toMatchObject({
+      obligation: obligationRecord._id,
+      images: {
+        attachments: [{
+          report: revisedCompletionReport.report,
+          evidenceImage: tinyPng,
+          evidenceImageName: "restaurant-receipt.png",
+        }],
+      },
     });
 
     const confirmedReceipt = await handler(

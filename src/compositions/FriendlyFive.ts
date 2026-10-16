@@ -736,6 +736,19 @@ const ResolutionHistory = former(
     }),
 );
 
+const ResolutionImages = former(
+  "the private image evidence for (case)",
+  ({ case: caseId }, { report, evidenceImage, evidenceImageName, disputeImage, disputeImageName }) =>
+    form({
+      attachments: each(Resolving._images({ case: caseId }).is({ report }))
+        .where(
+          whether(Resolving._images({ case: caseId }).is({ report, evidenceImage, evidenceImageName })),
+          whether(Resolving._images({ case: caseId }).is({ report, disputeImage, disputeImageName })),
+        )
+        .form({ report, evidenceImage, evidenceImageName, disputeImage, disputeImageName }),
+    }),
+);
+
 const GetResolutionHistory = endpoint(
   "/resolutions/history",
   ({ session, case: caseId, user }) =>
@@ -758,14 +771,36 @@ const GetResolutionHistory = endpoint(
   { input: { required: ["session", "case"] } },
 );
 
+const GetResolutionImages = endpoint(
+  "/resolutions/images",
+  ({ session, case: caseId, user }) =>
+    receive({ session, case: caseId })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(Resolving._canView({ case: caseId, user }).is({ case: caseId }))
+          .then(respond({ case: caseId, images: ResolutionImages({ case: caseId }) }))
+          .named("authorized"),
+        where(
+          Resolving._get({ case: caseId }),
+          no(Resolving._canView({ case: caseId, user }).is({ case: caseId })),
+        )
+          .then(respond({ error: "RESOLUTION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(Resolving._get({ case: caseId })))
+          .then(respond({ error: "RESOLUTION_NOT_FOUND" }))
+          .named("missing"),
+      ),
+  { input: { required: ["session", "case"] } },
+);
+
 const ReportOutcome = endpoint(
   "/resolutions/report",
-  ({ session, case: caseId, outcome, evidence, user, report }) =>
-    receive({ session, case: caseId, outcome, evidence })
+  ({ session, case: caseId, outcome, evidence, evidenceImage, evidenceImageName, user, report }) =>
+    receive({ session, case: caseId, outcome, evidence, evidenceImage, evidenceImageName })
       .then(Authenticating.authenticate({ session }).responds({ user }))
-      .then(Resolving.submit({ user, case: caseId, outcome, evidence }).responds({ report }))
+      .then(Resolving.submit({ user, case: caseId, outcome, evidence, evidenceImage, evidenceImageName }).responds({ report }))
       .then(respond({ report })),
-  { input: { required: ["session", "case", "outcome"], defaults: { evidence: null } } },
+  { input: { required: ["session", "case", "outcome"], defaults: { evidence: null, evidenceImage: null, evidenceImageName: null } } },
 );
 
 const ConfirmOutcome = endpoint(
@@ -780,22 +815,22 @@ const ConfirmOutcome = endpoint(
 
 const DisputeOutcome = endpoint(
   "/resolutions/dispute",
-  ({ session, case: caseId, report, reason, user }) =>
-    receive({ session, case: caseId, report, reason })
+  ({ session, case: caseId, report, reason, evidenceImage, evidenceImageName, user }) =>
+    receive({ session, case: caseId, report, reason, evidenceImage, evidenceImageName })
       .then(Authenticating.authenticate({ session }).responds({ user }))
-      .then(Resolving.dispute({ user, case: caseId, report, reason }).responds({}))
+      .then(Resolving.dispute({ user, case: caseId, report, reason, evidenceImage, evidenceImageName }).responds({}))
       .then(respond({ disputed: true })),
-  { input: { required: ["session", "case", "report", "reason"] } },
+  { input: { required: ["session", "case", "report", "reason"], defaults: { evidenceImage: null, evidenceImageName: null } } },
 );
 
 const DecideOutcome = endpoint(
   "/resolutions/decide",
-  ({ session, case: caseId, outcome, evidence, user, report }) =>
-    receive({ session, case: caseId, outcome, evidence })
+  ({ session, case: caseId, outcome, evidence, evidenceImage, evidenceImageName, user, report }) =>
+    receive({ session, case: caseId, outcome, evidence, evidenceImage, evidenceImageName })
       .then(Authenticating.authenticate({ session }).responds({ user }))
-      .then(Resolving.decide({ user, case: caseId, outcome, evidence }).responds({ report }))
+      .then(Resolving.decide({ user, case: caseId, outcome, evidence, evidenceImage, evidenceImageName }).responds({ report }))
       .then(respond({ report })),
-  { input: { required: ["session", "case", "outcome", "evidence"] } },
+  { input: { required: ["session", "case", "outcome", "evidence"], defaults: { evidenceImage: null, evidenceImageName: null } } },
 );
 
 const GetObligation = endpoint(
@@ -902,14 +937,49 @@ const GetCurrentCompletion = endpoint(
   { input: { required: ["session", "obligation"] } },
 );
 
+const ObligationImages = former(
+  "the private completion image evidence for (obligation)",
+  ({ obligation }, { report, evidenceImage, evidenceImageName, disputeImage, disputeImageName }) =>
+    form({
+      attachments: each(ObligationTracking._images({ obligation }).is({ report }))
+        .where(
+          whether(ObligationTracking._images({ obligation }).is({ report, evidenceImage, evidenceImageName })),
+          whether(ObligationTracking._images({ obligation }).is({ report, disputeImage, disputeImageName })),
+        )
+        .form({ report, evidenceImage, evidenceImageName, disputeImage, disputeImageName }),
+    }),
+);
+
+const GetObligationImages = endpoint(
+  "/obligations/images",
+  ({ session, obligation, user }) =>
+    receive({ session, obligation })
+      .then(Authenticating.authenticate({ session }).responds({ user }))
+      .then(
+        where(ObligationTracking._canView({ obligation, user }).is({ obligation }))
+          .then(respond({ obligation, images: ObligationImages({ obligation }) }))
+          .named("authorized"),
+        where(
+          ObligationTracking._get({ obligation }),
+          no(ObligationTracking._canView({ obligation, user }).is({ obligation })),
+        )
+          .then(respond({ error: "OBLIGATION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
+        where(no(ObligationTracking._get({ obligation })))
+          .then(respond({ error: "OBLIGATION_NOT_FOUND" }))
+          .named("missing"),
+      ),
+  { input: { required: ["session", "obligation"] } },
+);
+
 const ReportCompletion = endpoint(
   "/obligations/report",
-  ({ session, obligation, evidence, user, report }) =>
-    receive({ session, obligation, evidence })
+  ({ session, obligation, evidence, evidenceImage, evidenceImageName, user, report }) =>
+    receive({ session, obligation, evidence, evidenceImage, evidenceImageName })
       .then(Authenticating.authenticate({ session }).responds({ user }))
-      .then(ObligationTracking.reportCompletion({ user, obligation, evidence }).responds({ report }))
+      .then(ObligationTracking.reportCompletion({ user, obligation, evidence, evidenceImage, evidenceImageName }).responds({ report }))
       .then(respond({ report })),
-  { input: { required: ["session", "obligation"], defaults: { evidence: null } } },
+  { input: { required: ["session", "obligation"], defaults: { evidence: null, evidenceImage: null, evidenceImageName: null } } },
 );
 
 const ConfirmReceipt = endpoint(
@@ -924,12 +994,12 @@ const ConfirmReceipt = endpoint(
 
 const DisputeReceipt = endpoint(
   "/obligations/dispute",
-  ({ session, obligation, report, evidence, user }) =>
-    receive({ session, obligation, report, evidence })
+  ({ session, obligation, report, evidence, evidenceImage, evidenceImageName, user }) =>
+    receive({ session, obligation, report, evidence, evidenceImage, evidenceImageName })
       .then(Authenticating.authenticate({ session }).responds({ user }))
-      .then(ObligationTracking.disputeReceipt({ user, obligation, report, evidence }).responds({}))
+      .then(ObligationTracking.disputeReceipt({ user, obligation, report, evidence, evidenceImage, evidenceImageName }).responds({}))
       .then(respond({ disputed: true })),
-  { input: { required: ["session", "obligation", "report", "evidence"] } },
+  { input: { required: ["session", "obligation", "report", "evidence"], defaults: { evidenceImage: null, evidenceImageName: null } } },
 );
 
 const FinalTrueDecisionRecordsObligation = reaction(({ resolver, resolutionCase, report, item, first, second, decisionEvidence, currentVersion, counterpartStake }) =>
@@ -993,6 +1063,6 @@ const ConfirmedFalseOutcomeRecordsObligation = reaction(({ confirmer, resolution
 export const composition = {
   Accounts: { Register, SignIn, CurrentUser, SignOut },
   Agreements: { ListAgreements, Propose, Revise, GetInvitationLink, Get, GetInvitation, GetAgreementHistory, RevokeInvitation, Accept, Reject, Withdraw },
-  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, GetResolutionHistory, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
-  Obligations: { GetObligation, GetObligationForAgreement, GetCurrentCompletion, ReportCompletion, ConfirmReceipt, DisputeReceipt },
+  Outcomes: { AcceptedAgreementOpensCase, GetResolution, GetResolutionForAgreement, GetCurrentReport, GetResolutionHistory, GetResolutionImages, ReportOutcome, ConfirmOutcome, DisputeOutcome, DecideOutcome, FinalTrueDecisionRecordsObligation, FinalFalseDecisionRecordsObligation, ConfirmedTrueOutcomeRecordsObligation, ConfirmedFalseOutcomeRecordsObligation },
+  Obligations: { GetObligation, GetObligationForAgreement, GetCurrentCompletion, GetObligationImages, ReportCompletion, ConfirmReceipt, DisputeReceipt },
 };

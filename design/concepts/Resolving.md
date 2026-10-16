@@ -43,11 +43,16 @@ a seq of Reports with
   an author User
   an outcome Outcome
   an optional evidence String
+  an optional evidenceImage String
+  an optional evidenceImageName String
   a reportedAt DateTime
   an optional disputedBy User
   an optional disputeReason String
+  an optional disputeImage String
+  an optional disputeImageName String
 
 Rule: Each currentReport belongs to its case. Report authors, outcomes, evidence, and reportedAt are immutable.
+Rule: An evidenceImage or disputeImage is a JPEG, PNG, or WebP data URL containing at most 2 MB of decoded image data and always has its corresponding nonblank image name. Image names contain at most 120 characters and no control characters.
 Rule: resolvedAt exists exactly when status is FINAL. A FINAL case has a currentReport recording its final outcome.
 ```
 
@@ -70,7 +75,7 @@ open(item: Item, first: User, second: User, cutoff: DateTime, resolutionRule: St
     set status to OPEN, with no currentReport or resolvedAt
     returns case
 
-submit(user: User, case: Case, outcome: Outcome, evidence?: String) : returns (report: Report)
+submit(user: User, case: Case, outcome: Outcome, evidence?: String, evidenceImage?: String, evidenceImageName?: String) : returns (report: Report)
   where case is unknown or case's status is neither OPEN nor DISPUTED
   then
     refuses SUBMISSION_CASE_CLOSED "This case is not open for an outcome report."
@@ -83,9 +88,12 @@ submit(user: User, case: Case, outcome: Outcome, evidence?: String) : returns (r
   where evidence is supplied and blank
   then
     refuses SUBMISSION_INVALID_EVIDENCE "Evidence cannot be blank when supplied."
+  where evidenceImage or evidenceImageName is invalid or supplied without the other
+  then
+    refuses EVIDENCE_IMAGE_INVALID "Evidence images must be JPEG, PNG, or WebP files no larger than 2 MB."
   where submission is valid
   then
-    add a new report with case, author user, outcome, evidence if supplied, reportedAt set to the current time, and no disputedBy or disputeReason
+    add a new report with case, author user, outcome, evidence and evidence image fields if supplied, reportedAt set to the current time, and no dispute fields
     set case's currentReport to report and status to PROPOSED
     returns report
 
@@ -102,7 +110,7 @@ confirm(user: User, case: Case, report: Report) : returns ()
     set case's resolvedAt to the current time
     returns
 
-dispute(user: User, case: Case, report: Report, reason: String) : returns ()
+dispute(user: User, case: Case, report: Report, reason: String, evidenceImage?: String, evidenceImageName?: String) : returns ()
   where case is unknown or case's status is not PROPOSED or report is not its currentReport
   then
     refuses DISPUTE_NOT_CURRENT "Only the current proposed report can be disputed."
@@ -112,13 +120,16 @@ dispute(user: User, case: Case, report: Report, reason: String) : returns ()
   where reason is blank
   then
     refuses DISPUTE_EVIDENCE_REQUIRED "A dispute needs an explanation or supporting evidence."
+  where evidenceImage or evidenceImageName is invalid or supplied without the other
+  then
+    refuses EVIDENCE_IMAGE_INVALID "Evidence images must be JPEG, PNG, or WebP files no larger than 2 MB."
   where dispute is valid
   then
-    set report's disputedBy to user and disputeReason to reason
+    set report's disputedBy to user, disputeReason to reason, and dispute image fields if supplied
     set case's status to DISPUTED
     returns
 
-decide(user: User, case: Case, outcome: Outcome, evidence: String) : returns (report: Report)
+decide(user: User, case: Case, outcome: Outcome, evidence: String, evidenceImage?: String, evidenceImageName?: String) : returns (report: Report)
   where case is unknown or case's status is FINAL
   then
     refuses DECISION_CASE_CLOSED "This case is already final or does not exist."
@@ -134,9 +145,12 @@ decide(user: User, case: Case, outcome: Outcome, evidence: String) : returns (re
   where evidence is blank
   then
     refuses DECISION_EVIDENCE_REQUIRED "A resolver decision needs supporting evidence or an explanation."
+  where evidenceImage or evidenceImageName is invalid or supplied without the other
+  then
+    refuses EVIDENCE_IMAGE_INVALID "Evidence images must be JPEG, PNG, or WebP files no larger than 2 MB."
   where decision is valid
   then
-    add a new report with case, author user, outcome, evidence, reportedAt set to the current time, and no disputedBy or disputeReason
+    add a new report with case, author user, outcome, evidence, evidence image fields if supplied, reportedAt set to the current time, and no dispute fields
     set case's currentReport to report and status to FINAL
     set case's resolvedAt to the current time
     returns report
@@ -165,6 +179,9 @@ _report(report: Report) : optional (case: Case, author: User, outcome: Outcome, 
 
 _hasEvidence(report: Report) : optional (report: Report)
   returns the report when it exists and has nonblank evidence
+
+_images(case: Case) : many (report: Report, evidenceImage?: String, evidenceImageName?: String, disputeImage?: String, disputeImageName?: String)
+  returns the image evidence for reports in the case, in ascending reportedAt order, omitting reports without images
 
 _reports(case: Case) : many (report: Report, author: User, outcome: Outcome, evidence?: String, reportedAt: DateTime, disputedBy?: User, disputeReason?: String)
   returns all reports for the case in ascending reportedAt order

@@ -3,6 +3,7 @@ import { MongoClient, type Db } from "mongodb";
 import {
   CompletionInvalidEvidence,
   CompletionNotOwing,
+  EvidenceImageInvalid,
   ObligationTrackingConcept,
   ObligationAlreadyExists,
   ObligationInvalidDescription,
@@ -20,6 +21,7 @@ const testUrl = new URL(configuredUrl);
 testUrl.pathname = "/friendlyfive_obligation_test";
 const client = new MongoClient(testUrl.toString());
 let database: Db;
+const tinyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X3LsAAAAAElFTkSuQmCC";
 
 async function resetDatabase(): Promise<void> {
   if (database.databaseName !== "friendlyfive_obligation_test") throw new Error("Tests may only reset the friendlyfive_obligation_test database.");
@@ -48,11 +50,38 @@ describe("ObligationTracking", () => {
     const tracking = new ObligationTrackingConcept(database);
     const created = await tracking.record({ item: "agreement-false", owing: "wyatt", recipient: "alex", description: "coffee" });
     await expect(tracking.reportCompletion({ user: "alex", obligation: created.obligation })).rejects.toThrow(CompletionNotOwing);
-    const report = await tracking.reportCompletion({ user: "wyatt", obligation: created.obligation });
+    await expect(
+      tracking.reportCompletion({
+        user: "wyatt",
+        obligation: created.obligation,
+        evidenceImage: "data:image/png;base64,aGVsbG8=",
+        evidenceImageName: "fake.png",
+      }),
+    ).rejects.toThrow(EvidenceImageInvalid);
+    const report = await tracking.reportCompletion({
+      user: "wyatt",
+      obligation: created.obligation,
+      evidenceImage: tinyPng,
+      evidenceImageName: "receipt.png",
+    });
     await expect(tracking.disputeReceipt({ user: "alex", obligation: created.obligation, report: report.report, evidence: "" })).rejects.toThrow(ReceiptDisputeEvidenceRequired);
-    await tracking.disputeReceipt({ user: "alex", obligation: created.obligation, report: report.report, evidence: "The item was not delivered." });
+    await tracking.disputeReceipt({
+      user: "alex",
+      obligation: created.obligation,
+      report: report.report,
+      evidence: "The item was not delivered.",
+      evidenceImage: tinyPng,
+      evidenceImageName: "empty-table.png",
+    });
     await expect(tracking._get({ obligation: created.obligation })).resolves.toMatchObject([{ status: "DISPUTED" }]);
     await expect(tracking._current({ obligation: created.obligation })).resolves.toMatchObject([{ report: report.report, disputeEvidence: "The item was not delivered." }]);
+    await expect(tracking._images({ obligation: created.obligation })).resolves.toEqual([{
+      report: report.report,
+      evidenceImage: tinyPng,
+      evidenceImageName: "receipt.png",
+      disputeImage: tinyPng,
+      disputeImageName: "empty-table.png",
+    }]);
     const revised = await tracking.reportCompletion({ user: "wyatt", obligation: created.obligation, evidence: "Delivery receipt" });
     await expect(tracking._hasEvidence({ report: revised.report })).resolves.toEqual([{ report: revised.report }]);
   });

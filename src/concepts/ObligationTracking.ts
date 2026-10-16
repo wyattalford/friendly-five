@@ -1,4 +1,7 @@
 import { MongoServerError, type Collection, type Db } from 'mongodb';
+import { EvidenceImageInvalid, normalizedEvidenceImage } from '../evidenceImage.ts';
+
+export { EvidenceImageInvalid } from '../evidenceImage.ts';
 
 export class ObligationAlreadyExists extends Error {}
 export class ObligationSamePerson extends Error {}
@@ -29,8 +32,12 @@ type CompletionDocument = {
     _id: string;
     obligation: string;
     evidence?: string;
+    evidenceImage?: string;
+    evidenceImageName?: string;
     reportedAt: Date;
     disputeEvidence?: string;
+    disputeImage?: string;
+    disputeImageName?: string;
 };
 
 function ensureIndexes(
@@ -104,10 +111,14 @@ export class ObligationTrackingConcept {
         user,
         obligation: obligationId,
         evidence,
+        evidenceImage,
+        evidenceImageName,
     }: {
         user: string;
         obligation: string;
         evidence?: string | null;
+        evidenceImage?: string | null;
+        evidenceImageName?: string | null;
     }) {
         const record = await this.obligations.findOne({ _id: obligationId });
         if (
@@ -126,6 +137,7 @@ export class ObligationTrackingConcept {
             throw new CompletionInvalidEvidence(
                 'Evidence cannot be blank when supplied.',
             );
+        const image = normalizedEvidenceImage(evidenceImage, evidenceImageName);
         await ensureIndexes(this.obligations, this.reports);
         const report = crypto.randomUUID();
         await this.reports.insertOne({
@@ -134,6 +146,12 @@ export class ObligationTrackingConcept {
             ...(suppliedEvidence === undefined
                 ? {}
                 : { evidence: suppliedEvidence }),
+            ...(image.image === undefined
+                ? {}
+                : {
+                      evidenceImage: image.image,
+                      evidenceImageName: image.imageName,
+                  }),
             reportedAt: new Date(),
         });
         await this.obligations.updateOne(
@@ -177,11 +195,15 @@ export class ObligationTrackingConcept {
         obligation: obligationId,
         report,
         evidence,
+        evidenceImage,
+        evidenceImageName,
     }: {
         user: string;
         obligation: string;
         report: string;
         evidence: string;
+        evidenceImage?: string | null;
+        evidenceImageName?: string | null;
     }) {
         const record = await this.obligations.findOne({ _id: obligationId });
         if (
@@ -200,9 +222,20 @@ export class ObligationTrackingConcept {
             throw new ReceiptDisputeEvidenceRequired(
                 'A completion dispute needs an explanation or supporting evidence.',
             );
+        const image = normalizedEvidenceImage(evidenceImage, evidenceImageName);
         await this.reports.updateOne(
             { _id: report },
-            { $set: { disputeEvidence: evidence } },
+            {
+                $set: {
+                    disputeEvidence: evidence,
+                    ...(image.image === undefined
+                        ? {}
+                        : {
+                              disputeImage: image.image,
+                              disputeImageName: image.imageName,
+                          }),
+                },
+            },
         );
         await this.obligations.updateOne(
             { _id: obligationId, status: 'REPORTED', currentReport: report },
@@ -275,5 +308,33 @@ export class ObligationTrackingConcept {
             evidence: { $exists: true, $ne: '' },
         });
         return record === null ? [] : [{ report: record._id }];
+    }
+
+    async _images({ obligation: obligationId }: { obligation: string }) {
+        const reports = await this.reports
+            .find({
+                obligation: obligationId,
+                $or: [
+                    { evidenceImage: { $exists: true } },
+                    { disputeImage: { $exists: true } },
+                ],
+            })
+            .sort({ reportedAt: 1, _id: 1 })
+            .toArray();
+        return reports.map((report) => ({
+            report: report._id,
+            ...(report.evidenceImage === undefined
+                ? {}
+                : {
+                      evidenceImage: report.evidenceImage,
+                      evidenceImageName: report.evidenceImageName,
+                  }),
+            ...(report.disputeImage === undefined
+                ? {}
+                : {
+                      disputeImage: report.disputeImage,
+                      disputeImageName: report.disputeImageName,
+                  }),
+        }));
     }
 }

@@ -8,6 +8,7 @@ import {
   DecisionNotResolver,
   DisputeEvidenceRequired,
   DisputeNotAuthorized,
+  EvidenceImageInvalid,
   ResolvingConcept,
   SubmissionInvalidEvidence,
   SubmissionNotParticipant,
@@ -21,6 +22,7 @@ const testUrl = new URL(configuredUrl);
 testUrl.pathname = "/friendlyfive_resolving_test";
 const client = new MongoClient(testUrl.toString());
 let database: Db;
+const tinyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X3LsAAAAAElFTkSuQmCC";
 
 async function resetDatabase(): Promise<void> {
   if (database.databaseName !== "friendlyfive_resolving_test") {
@@ -75,6 +77,54 @@ describe("Resolving", () => {
     expect(timing[0]?.serverTime.getTime()).toBeLessThanOrEqual(afterTiming);
     await expect(resolving._current({ case: opened.case })).resolves.toMatchObject([
       { report: submitted.report, author: "wyatt", outcome: "TRUE" },
+    ]);
+  });
+
+  test("stores valid private image evidence and rejects malformed images", async () => {
+    const resolving = new ResolvingConcept(database);
+    const opened = await resolving.open({
+      item: "agreement-image",
+      first: "wyatt",
+      second: "alex",
+      resolver: "morgan",
+      cutoff: new Date(Date.now() - 1_000),
+      resolutionRule: "Use the official final score",
+    });
+
+    await expect(
+      resolving.submit({
+        user: "wyatt",
+        case: opened.case,
+        outcome: "TRUE",
+        evidenceImage: "data:image/png;base64,aGVsbG8=",
+        evidenceImageName: "fake.png",
+      }),
+    ).rejects.toThrow(EvidenceImageInvalid);
+
+    const submitted = await resolving.submit({
+      user: "wyatt",
+      case: opened.case,
+      outcome: "TRUE",
+      evidenceImage: tinyPng,
+      evidenceImageName: "score.png",
+    });
+    await resolving.dispute({
+      user: "alex",
+      case: opened.case,
+      report: submitted.report,
+      reason: "This is the wrong result.",
+      evidenceImage: tinyPng,
+      evidenceImageName: "correct-score.png",
+    });
+
+    await expect(resolving._images({ case: opened.case })).resolves.toEqual([
+      {
+        report: submitted.report,
+        evidenceImage: tinyPng,
+        evidenceImageName: "score.png",
+        disputeImage: tinyPng,
+        disputeImageName: "correct-score.png",
+      },
     ]);
   });
 

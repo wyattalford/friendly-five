@@ -1,4 +1,7 @@
 import { MongoServerError, type Collection, type Db } from "mongodb";
+import { EvidenceImageInvalid, normalizedEvidenceImage } from "../evidenceImage.ts";
+
+export { EvidenceImageInvalid } from "../evidenceImage.ts";
 
 export class CaseAlreadyOpen extends Error {}
 export class CaseSameParticipant extends Error {}
@@ -40,10 +43,15 @@ type ReportDocument = {
   author: string;
   outcome: Outcome;
   evidence?: string;
+  evidenceImage?: string;
+  evidenceImageName?: string;
   reportedAt: Date;
   disputedBy?: string;
   disputeReason?: string;
+  disputeImage?: string;
+  disputeImageName?: string;
 };
+
 
 function ensureIndexes(cases: Collection<CaseDocument>, reports: Collection<ReportDocument>): Promise<void> {
   return Promise.all([
@@ -89,16 +97,17 @@ export class ResolvingConcept {
     return { case: resolutionCase };
   }
 
-  async submit({ user, case: caseId, outcome, evidence }: { user: string; case: string; outcome: Outcome; evidence?: string | null }) {
+  async submit({ user, case: caseId, outcome, evidence, evidenceImage, evidenceImageName }: { user: string; case: string; outcome: Outcome; evidence?: string | null; evidenceImage?: string | null; evidenceImageName?: string | null }) {
     const record = await this.cases.findOne({ _id: caseId });
     if (record === null || (record.status !== "OPEN" && record.status !== "DISPUTED")) throw new SubmissionCaseClosed("This case is not open for an outcome report.");
     if (user !== record.first && user !== record.second) throw new SubmissionNotParticipant("Only a case participant can submit an outcome.");
     if (Date.now() < record.cutoff.getTime()) throw new SubmissionTooEarly("The resolution cutoff has not passed.");
     const suppliedEvidence = evidence === null ? undefined : evidence;
     if (suppliedEvidence !== undefined && suppliedEvidence.trim() === "") throw new SubmissionInvalidEvidence("Evidence cannot be blank when supplied.");
+    const image = normalizedEvidenceImage(evidenceImage, evidenceImageName);
     await ensureIndexes(this.cases, this.reports);
     const report = crypto.randomUUID();
-    await this.reports.insertOne({ _id: report, case: caseId, author: user, outcome, ...(suppliedEvidence === undefined ? {} : { evidence: suppliedEvidence }), reportedAt: new Date() });
+    await this.reports.insertOne({ _id: report, case: caseId, author: user, outcome, ...(suppliedEvidence === undefined ? {} : { evidence: suppliedEvidence }), ...(image.image === undefined ? {} : { evidenceImage: image.image, evidenceImageName: image.imageName }), reportedAt: new Date() });
     await this.cases.updateOne({ _id: caseId, status: { $in: ["OPEN", "DISPUTED"] } }, { $set: { currentReport: report, status: "PROPOSED" } });
     return { report };
   }
@@ -112,27 +121,29 @@ export class ResolvingConcept {
     return {};
   }
 
-  async dispute({ user, case: caseId, report, reason }: { user: string; case: string; report: string; reason: string }) {
+  async dispute({ user, case: caseId, report, reason, evidenceImage, evidenceImageName }: { user: string; case: string; report: string; reason: string; evidenceImage?: string | null; evidenceImageName?: string | null }) {
     const record = await this.cases.findOne({ _id: caseId });
     if (record === null || record.status !== "PROPOSED" || record.currentReport !== report) throw new DisputeNotCurrent("Only the current proposed report can be disputed.");
     const current = await this.reports.findOne({ _id: report });
     if (current === null || (user !== record.first && user !== record.second) || user === current.author) throw new DisputeNotAuthorized("Only the other participant can dispute this report.");
     if (reason.trim() === "") throw new DisputeEvidenceRequired("A dispute needs an explanation or supporting evidence.");
-    await this.reports.updateOne({ _id: report }, { $set: { disputedBy: user, disputeReason: reason } });
+    const image = normalizedEvidenceImage(evidenceImage, evidenceImageName);
+    await this.reports.updateOne({ _id: report }, { $set: { disputedBy: user, disputeReason: reason, ...(image.image === undefined ? {} : { disputeImage: image.image, disputeImageName: image.imageName }) } });
     await this.cases.updateOne({ _id: caseId, status: "PROPOSED", currentReport: report }, { $set: { status: "DISPUTED" } });
     return {};
   }
 
-  async decide({ user, case: caseId, outcome, evidence }: { user: string; case: string; outcome: Outcome; evidence: string }) {
+  async decide({ user, case: caseId, outcome, evidence, evidenceImage, evidenceImageName }: { user: string; case: string; outcome: Outcome; evidence: string; evidenceImage?: string | null; evidenceImageName?: string | null }) {
     const record = await this.cases.findOne({ _id: caseId });
     if (record === null || record.status === "FINAL") throw new DecisionCaseClosed("This case is already final or does not exist.");
     if (record.status !== "DISPUTED") throw new DecisionNotDisputed("A resolver can decide only after a participant disputes the current report.");
     if (record.resolver === undefined || user !== record.resolver) throw new DecisionNotResolver("Only the designated resolver can decide this case.");
     if (Date.now() < record.cutoff.getTime()) throw new DecisionTooEarly("The resolution cutoff has not passed.");
     if (evidence.trim() === "") throw new DecisionEvidenceRequired("A resolver decision needs supporting evidence or an explanation.");
+    const image = normalizedEvidenceImage(evidenceImage, evidenceImageName);
     await ensureIndexes(this.cases, this.reports);
     const report = crypto.randomUUID();
-    await this.reports.insertOne({ _id: report, case: caseId, author: user, outcome, evidence, reportedAt: new Date() });
+    await this.reports.insertOne({ _id: report, case: caseId, author: user, outcome, evidence, ...(image.image === undefined ? {} : { evidenceImage: image.image, evidenceImageName: image.imageName }), reportedAt: new Date() });
     await this.cases.updateOne({ _id: caseId, status: "DISPUTED" }, { $set: { currentReport: report, status: "FINAL", resolvedAt: new Date() } });
     return { report };
   }
@@ -208,6 +219,27 @@ export class ResolvingConcept {
       evidence: { $exists: true, $ne: "" },
     });
     return record === null ? [] : [{ report: record._id }];
+  }
+
+  async _images({ case: caseId }: { case: string }) {
+    const reports = await this.reports.find({
+      case: caseId,
+      $or: [
+        { evidenceImage: { $exists: true } },
+        { disputeImage: { $exists: true } },
+      ],
+    }).sort({ reportedAt: 1, _id: 1 }).toArray();
+    return reports.map((report) => ({
+      report: report._id,
+      ...(report.evidenceImage === undefined ? {} : {
+        evidenceImage: report.evidenceImage,
+        evidenceImageName: report.evidenceImageName,
+      }),
+      ...(report.disputeImage === undefined ? {} : {
+        disputeImage: report.disputeImage,
+        disputeImageName: report.disputeImageName,
+      }),
+    }));
   }
 
   async _reports({ case: caseId }: { case: string }) {

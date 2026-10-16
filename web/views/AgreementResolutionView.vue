@@ -17,10 +17,16 @@ type ReportDetails = Exclude<ReportResult, { error: unknown }>;
 type HistoryResult = Awaited<ReturnType<typeof api.resolutions.history>>;
 type HistoryDetails = Exclude<HistoryResult, { error: unknown }>;
 type HistoryReport = HistoryDetails["history"]["reports"][number];
+type ResolutionImagesResult = Awaited<ReturnType<typeof api.resolutions.images>>;
+type ResolutionImagesDetails = Exclude<ResolutionImagesResult, { error: unknown }>;
+type ResolutionImage = ResolutionImagesDetails["images"]["attachments"][number];
 type ObligationResult = Awaited<ReturnType<typeof api.obligations["by-agreement"]>>;
 type ObligationDetails = Exclude<ObligationResult, { error: unknown }>;
 type CompletionResult = Awaited<ReturnType<typeof api.obligations.current>>;
 type CompletionDetails = Exclude<CompletionResult, { error: unknown }>;
+type ObligationImagesResult = Awaited<ReturnType<typeof api.obligations.images>>;
+type ObligationImagesDetails = Exclude<ObligationImagesResult, { error: unknown }>;
+type ObligationImage = ObligationImagesDetails["images"]["attachments"][number];
 
 const route = useRoute();
 const currentUserId = inject<Readonly<Ref<string>>>("currentUserId");
@@ -31,8 +37,10 @@ const agreementHistory = ref<AgreementVersion[]>([]);
 const resolution = ref<ResolutionDetails | null>(null);
 const currentReport = ref<ReportDetails | null>(null);
 const reportHistory = ref<HistoryReport[]>([]);
+const resolutionImages = ref<ResolutionImage[]>([]);
 const obligation = ref<ObligationDetails | null>(null);
 const currentCompletion = ref<CompletionDetails | null>(null);
+const obligationImages = ref<ObligationImage[]>([]);
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref("");
@@ -44,6 +52,13 @@ const decisionOutcome = ref<Outcome>("TRUE");
 const decisionEvidence = ref("");
 const completionEvidence = ref("");
 const completionDisputeEvidence = ref("");
+type ImagePurpose = "report" | "dispute" | "decision" | "completion" | "completionDispute";
+type ImageDraft = { data: string; name: string };
+const reportImage = ref<ImageDraft | null>(null);
+const disputeImage = ref<ImageDraft | null>(null);
+const decisionImage = ref<ImageDraft | null>(null);
+const completionImage = ref<ImageDraft | null>(null);
+const completionDisputeImage = ref<ImageDraft | null>(null);
 const currentTime = ref(Date.now());
 const serverClockOffsetMs = ref(0);
 let cutoffTimer: ReturnType<typeof setTimeout> | undefined;
@@ -123,6 +138,88 @@ function usernameFor(user: string): string {
   return "Unknown user";
 }
 
+function imagesFor(report: string): ResolutionImage | undefined {
+  return resolutionImages.value.find((attachment) => attachment.report === report);
+}
+
+function completionImagesFor(report: string): ObligationImage | undefined {
+  return obligationImages.value.find((attachment) => attachment.report === report);
+}
+
+function draftFor(purpose: ImagePurpose): Ref<ImageDraft | null> {
+  if (purpose === "report") return reportImage;
+  if (purpose === "dispute") return disputeImage;
+  if (purpose === "decision") return decisionImage;
+  if (purpose === "completion") return completionImage;
+  return completionDisputeImage;
+}
+
+function imagePayload(draft: ImageDraft | null) {
+  return draft === null
+    ? {}
+    : { evidenceImage: draft.data, evidenceImageName: draft.name };
+}
+
+function dataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result)));
+    reader.addEventListener("error", () => reject(new Error("The image could not be read.")));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function compressedImage(file: File): Promise<ImageDraft> {
+  const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  if (!acceptedTypes.has(file.type)) {
+    throw new Error("Choose a JPEG, PNG, or WebP image.");
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("Choose an image smaller than 10 MB.");
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (context === null) {
+    bitmap.close();
+    throw new Error("This browser could not prepare the image.");
+  }
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  if (blob === null || blob.size > 2 * 1024 * 1024) {
+    throw new Error("The prepared image is still too large. Choose a smaller image.");
+  }
+  const baseName = file.name.replace(/\.[^.]+$/, "").trim() || "evidence";
+  return { data: await dataUrl(blob), name: `${baseName.slice(0, 116)}.jpg` };
+}
+
+async function chooseEvidenceImage(event: Event, purpose: ImagePurpose): Promise<void> {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file === undefined) return;
+  error.value = "";
+  try {
+    draftFor(purpose).value = await compressedImage(file);
+  } catch (imageError) {
+    draftFor(purpose).value = null;
+    error.value = imageError instanceof Error ? imageError.message : "The image could not be prepared.";
+  } finally {
+    input.value = "";
+  }
+}
+
+function removeEvidenceImage(purpose: ImagePurpose): void {
+  draftFor(purpose).value = null;
+}
+
 function requestError(code: string): string {
   if (code === "FORBIDDEN") return "You are not authorized to use this resolution case.";
   if (code === "NOT_FOUND") return "The resolution case could not be found.";
@@ -165,6 +262,7 @@ async function loadObligation(): Promise<void> {
   ) {
     obligation.value = null;
     currentCompletion.value = null;
+    obligationImages.value = [];
     return;
   }
 
@@ -174,6 +272,7 @@ async function loadObligation(): Promise<void> {
   if ("error" in obligationResult) {
     obligation.value = null;
     currentCompletion.value = null;
+    obligationImages.value = [];
     error.value = obligationRequestError(obligationResult.error);
     return;
   }
@@ -181,6 +280,7 @@ async function loadObligation(): Promise<void> {
 
   if (obligationResult.status === "DUE") {
     currentCompletion.value = null;
+    obligationImages.value = [];
     return;
   }
 
@@ -189,10 +289,19 @@ async function loadObligation(): Promise<void> {
   });
   if ("error" in completionResult) {
     currentCompletion.value = null;
+    obligationImages.value = [];
     error.value = obligationRequestError(completionResult.error);
     return;
   }
   currentCompletion.value = completionResult;
+
+  const imagesResult = await api.obligations.images({ obligation: obligationResult.obligation });
+  if ("error" in imagesResult) {
+    obligationImages.value = [];
+    error.value = obligationRequestError(imagesResult.error);
+    return;
+  }
+  obligationImages.value = imagesResult.images.attachments;
 }
 
 async function loadPage(showLoading = true): Promise<void> {
@@ -206,8 +315,10 @@ async function loadPage(showLoading = true): Promise<void> {
       resolution.value = null;
       currentReport.value = null;
       reportHistory.value = [];
+      resolutionImages.value = [];
       obligation.value = null;
       currentCompletion.value = null;
+      obligationImages.value = [];
       error.value = requestError(agreementResult.error);
       return;
     }
@@ -230,8 +341,10 @@ async function loadPage(showLoading = true): Promise<void> {
       resolution.value = null;
       currentReport.value = null;
       reportHistory.value = [];
+      resolutionImages.value = [];
       obligation.value = null;
       currentCompletion.value = null;
+      obligationImages.value = [];
       error.value = requestError(resolutionResult.error);
       return;
     }
@@ -248,6 +361,14 @@ async function loadPage(showLoading = true): Promise<void> {
       return;
     }
     reportHistory.value = historyResult.history.reports;
+
+    const imagesResult = await api.resolutions.images({ case: resolutionResult.case });
+    if ("error" in imagesResult) {
+      resolutionImages.value = [];
+      error.value = requestError(imagesResult.error);
+      return;
+    }
+    resolutionImages.value = imagesResult.images.attachments;
 
     if (resolutionResult.status === "OPEN") {
       currentReport.value = null;
@@ -282,6 +403,7 @@ async function submitReport(): Promise<void> {
       case: resolution.value.case,
       outcome: reportOutcome.value,
       ...(evidence === "" ? {} : { evidence }),
+      ...imagePayload(reportImage.value),
     });
     if ("error" in result) {
       if (result.error === "INVALID_REQUEST") {
@@ -295,6 +417,7 @@ async function submitReport(): Promise<void> {
       return;
     }
     reportEvidence.value = "";
+    reportImage.value = null;
     await loadPage(false);
     notice.value = "Outcome submitted. The other participant can now confirm or dispute it.";
   } catch {
@@ -343,12 +466,14 @@ async function disputeReport(): Promise<void> {
       case: resolution.value.case,
       report: currentReport.value.report,
       reason,
+      ...imagePayload(disputeImage.value),
     });
     if ("error" in result) {
       error.value = requestError(result.error);
       return;
     }
     disputeReason.value = "";
+    disputeImage.value = null;
     await loadPage(false);
     notice.value = isResolver.value
       ? "Dispute recorded. You may submit a resolver decision."
@@ -376,12 +501,14 @@ async function decideOutcome(): Promise<void> {
       case: resolution.value.case,
       outcome: decisionOutcome.value,
       evidence,
+      ...imagePayload(decisionImage.value),
     });
     if ("error" in result) {
       error.value = requestError(result.error);
       return;
     }
     decisionEvidence.value = "";
+    decisionImage.value = null;
     await loadPage(false);
     notice.value = "Resolver decision recorded. The resolution is final.";
   } catch {
@@ -401,12 +528,14 @@ async function reportCompletion(): Promise<void> {
     const result = await api.obligations.report({
       obligation: obligation.value.obligation,
       ...(evidence === "" ? {} : { evidence }),
+      ...imagePayload(completionImage.value),
     });
     if ("error" in result) {
       error.value = obligationRequestError(result.error);
       return;
     }
     completionEvidence.value = "";
+    completionImage.value = null;
     await loadPage(false);
     notice.value = "Completion reported. The recipient can now confirm or dispute it.";
   } catch {
@@ -455,12 +584,14 @@ async function disputeCompletion(): Promise<void> {
       obligation: obligation.value.obligation,
       report: currentCompletion.value.report,
       evidence,
+      ...imagePayload(completionDisputeImage.value),
     });
     if ("error" in result) {
       error.value = obligationRequestError(result.error);
       return;
     }
     completionDisputeEvidence.value = "";
+    completionDisputeImage.value = null;
     await loadPage(false);
     notice.value = "Completion disputed. The owing participant can submit a revised report.";
   } catch {
@@ -556,10 +687,24 @@ watch(agreementId, () => loadPage());
           <strong>Evidence or explanation</strong>
           <p>{{ currentReport.evidence }}</p>
         </div>
+        <figure v-if="imagesFor(currentReport.report)?.evidenceImage" class="evidence-image">
+          <img
+            :src="imagesFor(currentReport.report)?.evidenceImage"
+            :alt="`Image evidence named ${imagesFor(currentReport.report)?.evidenceImageName}`"
+          />
+          <figcaption>{{ imagesFor(currentReport.report)?.evidenceImageName }}</figcaption>
+        </figure>
         <div v-if="'disputeReason' in currentReport" class="dispute-block">
           <strong>Disputed by {{ usernameFor(currentReport.disputedBy) }}</strong>
           <p>{{ currentReport.disputeReason }}</p>
         </div>
+        <figure v-if="imagesFor(currentReport.report)?.disputeImage" class="evidence-image dispute-image">
+          <img
+            :src="imagesFor(currentReport.report)?.disputeImage"
+            :alt="`Dispute image named ${imagesFor(currentReport.report)?.disputeImageName}`"
+          />
+          <figcaption>{{ imagesFor(currentReport.report)?.disputeImageName }}</figcaption>
+        </figure>
       </section>
 
       <section v-if="reportHistory.length > 0" class="history-card" aria-labelledby="outcome-history-heading">
@@ -587,10 +732,24 @@ watch(agreementId, () => loadPage());
                 <strong>Evidence or explanation</strong>
                 <p>{{ report.evidence }}</p>
               </div>
+              <figure v-if="imagesFor(report.report)?.evidenceImage" class="evidence-image">
+                <img
+                  :src="imagesFor(report.report)?.evidenceImage"
+                  :alt="`Image evidence named ${imagesFor(report.report)?.evidenceImageName}`"
+                />
+                <figcaption>{{ imagesFor(report.report)?.evidenceImageName }}</figcaption>
+              </figure>
               <div v-if="report.disputeReason" class="dispute-block">
                 <strong>Disputed by {{ usernameFor(report.disputedBy ?? "") }}</strong>
                 <p>{{ report.disputeReason }}</p>
               </div>
+              <figure v-if="imagesFor(report.report)?.disputeImage" class="evidence-image dispute-image">
+                <img
+                  :src="imagesFor(report.report)?.disputeImage"
+                  :alt="`Dispute image named ${imagesFor(report.report)?.disputeImageName}`"
+                />
+                <figcaption>{{ imagesFor(report.report)?.disputeImageName }}</figcaption>
+              </figure>
             </div>
           </li>
         </ol>
@@ -615,6 +774,23 @@ watch(agreementId, () => loadPage());
         </select>
         <label for="report-evidence">Evidence or explanation <span>optional</span></label>
         <textarea id="report-evidence" v-model="reportEvidence" rows="3" :disabled="submitting"></textarea>
+        <label for="report-image">Evidence photo <span>optional</span></label>
+        <input
+          id="report-image"
+          class="file-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          :disabled="submitting"
+          @change="chooseEvidenceImage($event, 'report')"
+        />
+        <p class="field-help">JPEG, PNG, or WebP. FriendlyFive prepares photos for secure storage.</p>
+        <figure v-if="reportImage" class="evidence-image evidence-preview">
+          <img :src="reportImage.data" alt="Selected outcome evidence preview" />
+          <figcaption>{{ reportImage.name }}</figcaption>
+          <button class="text-button" type="button" :disabled="submitting" @click="removeEvidenceImage('report')">
+            Remove photo
+          </button>
+        </figure>
         <button class="button button-primary" type="submit" :disabled="submitting">
           {{ submitting ? "Submitting…" : "Submit outcome" }}
         </button>
@@ -629,6 +805,22 @@ watch(agreementId, () => loadPage());
         <form class="resolution-form dispute-form" @submit.prevent="disputeReport">
           <label for="dispute-reason">Why do you dispute this outcome?</label>
           <textarea id="dispute-reason" v-model="disputeReason" required rows="3" :disabled="submitting"></textarea>
+          <label for="dispute-image">Supporting photo <span>optional</span></label>
+          <input
+            id="dispute-image"
+            class="file-input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            :disabled="submitting"
+            @change="chooseEvidenceImage($event, 'dispute')"
+          />
+          <figure v-if="disputeImage" class="evidence-image evidence-preview">
+            <img :src="disputeImage.data" alt="Selected dispute evidence preview" />
+            <figcaption>{{ disputeImage.name }}</figcaption>
+            <button class="text-button" type="button" :disabled="submitting" @click="removeEvidenceImage('dispute')">
+              Remove photo
+            </button>
+          </figure>
           <button class="button button-danger" type="submit" :disabled="submitting">
             {{ submitting ? "Saving…" : "Dispute outcome" }}
           </button>
@@ -652,6 +844,22 @@ watch(agreementId, () => loadPage());
         </select>
         <label for="decision-evidence">Evidence or explanation</label>
         <textarea id="decision-evidence" v-model="decisionEvidence" required rows="4" :disabled="submitting"></textarea>
+        <label for="decision-image">Supporting photo <span>optional</span></label>
+        <input
+          id="decision-image"
+          class="file-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          :disabled="submitting"
+          @change="chooseEvidenceImage($event, 'decision')"
+        />
+        <figure v-if="decisionImage" class="evidence-image evidence-preview">
+          <img :src="decisionImage.data" alt="Selected resolver evidence preview" />
+          <figcaption>{{ decisionImage.name }}</figcaption>
+          <button class="text-button" type="button" :disabled="submitting" @click="removeEvidenceImage('decision')">
+            Remove photo
+          </button>
+        </figure>
         <button class="button button-primary" type="submit" :disabled="submitting">
           {{ submitting ? "Recording decision…" : "Record final decision" }}
         </button>
@@ -691,10 +899,24 @@ watch(agreementId, () => loadPage());
             <strong>Evidence or explanation</strong>
             <p>{{ currentCompletion.evidence }}</p>
           </div>
+          <figure v-if="completionImagesFor(currentCompletion.report)?.evidenceImage" class="evidence-image">
+            <img
+              :src="completionImagesFor(currentCompletion.report)?.evidenceImage"
+              :alt="`Completion evidence named ${completionImagesFor(currentCompletion.report)?.evidenceImageName}`"
+            />
+            <figcaption>{{ completionImagesFor(currentCompletion.report)?.evidenceImageName }}</figcaption>
+          </figure>
           <div v-if="'disputeEvidence' in currentCompletion" class="dispute-block">
             <strong>Recipient's dispute</strong>
             <p>{{ currentCompletion.disputeEvidence }}</p>
           </div>
+          <figure v-if="completionImagesFor(currentCompletion.report)?.disputeImage" class="evidence-image dispute-image">
+            <img
+              :src="completionImagesFor(currentCompletion.report)?.disputeImage"
+              :alt="`Completion dispute evidence named ${completionImagesFor(currentCompletion.report)?.disputeImageName}`"
+            />
+            <figcaption>{{ completionImagesFor(currentCompletion.report)?.disputeImageName }}</figcaption>
+          </figure>
         </div>
 
         <form
@@ -717,6 +939,23 @@ watch(agreementId, () => loadPage());
             rows="3"
             :disabled="submitting"
           ></textarea>
+          <label for="completion-image">Receipt or completion photo <span>optional</span></label>
+          <input
+            id="completion-image"
+            class="file-input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            :disabled="submitting"
+            @change="chooseEvidenceImage($event, 'completion')"
+          />
+          <p class="field-help">Attach a receipt, delivery photo, or other simple proof if useful.</p>
+          <figure v-if="completionImage" class="evidence-image evidence-preview">
+            <img :src="completionImage.data" alt="Selected completion evidence preview" />
+            <figcaption>{{ completionImage.name }}</figcaption>
+            <button class="text-button" type="button" :disabled="submitting" @click="removeEvidenceImage('completion')">
+              Remove photo
+            </button>
+          </figure>
           <button class="button button-primary" type="submit" :disabled="submitting">
             {{ submitting ? "Submitting…" : "Report completion" }}
           </button>
@@ -742,6 +981,22 @@ watch(agreementId, () => loadPage());
               rows="3"
               :disabled="submitting"
             ></textarea>
+            <label for="completion-dispute-image">Supporting photo <span>optional</span></label>
+            <input
+              id="completion-dispute-image"
+              class="file-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              :disabled="submitting"
+              @change="chooseEvidenceImage($event, 'completionDispute')"
+            />
+            <figure v-if="completionDisputeImage" class="evidence-image evidence-preview">
+              <img :src="completionDisputeImage.data" alt="Selected completion dispute evidence preview" />
+              <figcaption>{{ completionDisputeImage.name }}</figcaption>
+              <button class="text-button" type="button" :disabled="submitting" @click="removeEvidenceImage('completionDispute')">
+                Remove photo
+              </button>
+            </figure>
             <button class="button button-danger" type="submit" :disabled="submitting">
               {{ submitting ? "Saving…" : "Dispute completion" }}
             </button>

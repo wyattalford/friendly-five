@@ -18,10 +18,12 @@ the terms both participants accepted.
 - Optional designated resolvers agreed upon as part of the terms
 - Opaque invitation links that identify an agreement without granting access
 - Acceptance, rejection, withdrawal, and pending-proposal link retrieval
-- Outcome reporting after the agreed cutoff, with optional evidence
+- Outcome reporting after the agreed cutoff, with optional text and photo evidence
 - Chronological outcome-report history that preserves disputed and replaced reports
 - Outcome confirmation or a dispute with a required explanation
 - Final resolver decisions for disputed outcomes
+- Private JPEG, PNG, or WebP evidence photos for outcome reports, disputes,
+  resolver decisions, completion reports, and receipt disputes
 - Automatic creation of the correct participant obligation for `TRUE` and
   `FALSE` outcomes, with no obligation for `VOID`
 - Completion reporting, receipt confirmation, and completion disputes
@@ -192,6 +194,12 @@ resolvers receive only the access their concept-owned roles allow. Invitation
 tokens identify an agreement, but possession of a token does not authorize an
 outsider to read or change it. Obligation details remain limited to the owing
 person and recipient.
+
+Evidence photos are compressed in the browser and validated again by the
+backend before MongoDB persistence. Only the agreement participants and
+designated resolver can retrieve resolution photos. Each eligible submission
+supports one photo with a 2 MB stored-image limit. Obligation photos remain
+limited to the owing person and recipient.
 
 ## Design sources
 
