@@ -476,10 +476,10 @@ watch(agreementId, () => loadPage());
 </script>
 
 <template>
-  <section class="page-content resolution-page" aria-labelledby="resolution-heading">
+  <section class="page-content resolution-page" aria-labelledby="resolution-heading" :aria-busy="loading">
     <RouterLink class="back-link" :to="{ name: 'home' }">← Home</RouterLink>
 
-    <div v-if="loading" class="welcome-card content-card">
+    <div v-if="loading" class="welcome-card content-card" role="status" aria-live="polite">
       <p class="eyebrow">Agreement resolution</p>
       <h1 id="resolution-heading">Loading the outcome…</h1>
     </div>
@@ -488,6 +488,9 @@ watch(agreementId, () => loadPage());
       <p class="eyebrow">Resolution unavailable</p>
       <h1 id="resolution-heading">This case could not be opened.</h1>
       <p class="notice notice-error" role="alert">{{ error }}</p>
+      <button class="button button-secondary retry-button" type="button" @click="loadPage()">
+        Try again
+      </button>
     </div>
 
     <template v-else-if="agreement && resolution">

@@ -51,6 +51,36 @@ a {
   color: inherit;
 }
 
+:where(a, button, summary):focus-visible {
+  border-radius: 0.3rem;
+  outline: 3px solid #32704b;
+  outline-offset: 3px;
+}
+
+#main-content:focus,
+.page-content[tabindex="-1"]:focus,
+h1[tabindex="-1"]:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 0.5rem;
+  left: 0.5rem;
+  border-radius: 0.45rem;
+  padding: 0.65rem 0.85rem;
+  color: #fff;
+  background: #285d3e;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 1rem));
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .page-shell {
   width: min(100%, 74rem);
   margin: 0 auto;
@@ -96,7 +126,10 @@ a {
 }
 
 .brand {
+  display: inline-flex;
   flex: none;
+  min-height: 2.75rem;
+  align-items: center;
   font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -228,7 +261,8 @@ h1 {
 
 .auth-form input:focus {
   border-color: #32704b;
-  outline: 3px solid #dceadf;
+  outline: 3px solid #32704b;
+  outline-offset: 2px;
 }
 
 .password-field {
@@ -254,7 +288,8 @@ h1 {
 
 .password-toggle:focus-visible {
   border-radius: 0.3rem;
-  outline: 3px solid #dceadf;
+  outline: 3px solid #32704b;
+  outline-offset: 2px;
 }
 
 .button {
@@ -307,6 +342,14 @@ h1 {
 .notice-success {
   color: #285d3e;
   background: #e1efe5;
+}
+
+.error-state p {
+  margin: 0;
+}
+
+.retry-button {
+  margin-top: 0.75rem;
 }
 
 .account-card {
@@ -463,7 +506,9 @@ h1 {
 }
 
 .back-link {
-  display: inline-block;
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
   margin-bottom: 1.5rem;
   color: #32704b;
   font-weight: 800;
@@ -551,7 +596,8 @@ h1 {
 .resolution-form textarea:focus,
 .resolution-form select:focus {
   border-color: #32704b;
-  outline: 3px solid #dceadf;
+  outline: 3px solid #32704b;
+  outline-offset: 2px;
 }
 
 .field-help {
@@ -841,6 +887,9 @@ h1 {
 }
 
 .history-details summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
   cursor: pointer;
   color: #285d3e;
   font-weight: 800;

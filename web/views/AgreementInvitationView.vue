@@ -303,10 +303,10 @@ watch([token, agreementId], loadAgreement);
 </script>
 
 <template>
-  <section class="page-content agreement-page" aria-labelledby="agreement-heading">
+  <section class="page-content agreement-page" aria-labelledby="agreement-heading" :aria-busy="loading">
     <RouterLink class="back-link" :to="{ name: 'home' }">← Home</RouterLink>
 
-    <div v-if="loading" class="welcome-card content-card">
+    <div v-if="loading" class="welcome-card content-card" role="status" aria-live="polite">
       <p class="eyebrow">Agreement</p>
       <h1 id="agreement-heading">Loading the agreement…</h1>
     </div>
@@ -315,6 +315,9 @@ watch([token, agreementId], loadAgreement);
       <p class="eyebrow">Agreement unavailable</p>
       <h1 id="agreement-heading">This agreement could not be opened.</h1>
       <p class="notice notice-error" role="alert">{{ error }}</p>
+      <button class="button button-secondary retry-button" type="button" @click="loadAgreement">
+        Try again
+      </button>
     </div>
 
     <template v-else-if="agreement">

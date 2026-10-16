@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, provide, readonly, ref } from "vue";
-import { RouterLink, RouterView } from "vue-router";
+import { computed, nextTick, onMounted, provide, readonly, ref, watch } from "vue";
+import { RouterLink, RouterView, useRoute } from "vue-router";
 import { api } from "./api.ts";
 
 type AuthMode = "sign-in" | "register";
 type NoticeKind = "error" | "success";
 
 const mode = ref<AuthMode>("sign-in");
+const route = useRoute();
 const username = ref("");
 const password = ref("");
 const showPassword = ref(false);
@@ -17,9 +18,26 @@ const noticeKind = ref<NoticeKind>("success");
 const submitting = ref(false);
 const initializing = ref(true);
 const passwordInput = ref<HTMLInputElement | null>(null);
+const mainContent = ref<HTMLElement | null>(null);
+const initialViewRendered = ref(false);
 
 const signedIn = computed(() => signedInUserId.value !== "");
 provide("currentUserId", readonly(signedInUserId));
+
+watch([() => route.fullPath, signedIn, initializing], async () => {
+  if (initializing.value) return;
+  if (!initialViewRendered.value) {
+    initialViewRendered.value = true;
+    return;
+  }
+  await nextTick();
+  const focusTarget = mainContent.value?.querySelector<HTMLElement>(
+    ".page-content[aria-labelledby], h1",
+  );
+  if (focusTarget === undefined || focusTarget === null) return;
+  focusTarget.setAttribute("tabindex", "-1");
+  focusTarget.focus();
+});
 
 function showNotice(message: string, kind: NoticeKind): void {
   notice.value = message;
@@ -151,6 +169,7 @@ onMounted(loadCurrentUser);
 
 <template>
   <main class="page-shell">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header class="site-header">
       <RouterLink class="brand" :to="{ name: 'home' }" aria-label="FriendlyFive home">
         FriendlyFive
@@ -164,39 +183,40 @@ onMounted(loadCurrentUser);
       <span v-else class="milestone">P2 MVP</span>
     </header>
 
-    <section v-if="initializing" class="welcome-card account-card" aria-labelledby="loading-heading">
-      <p class="eyebrow">FriendlyFive</p>
-      <h1 id="loading-heading">Checking your session…</h1>
-    </section>
+    <div id="main-content" ref="mainContent" tabindex="-1">
+      <section v-if="initializing" class="welcome-card account-card" aria-labelledby="loading-heading" role="status">
+        <p class="eyebrow">FriendlyFive</p>
+        <h1 id="loading-heading">Checking your session…</h1>
+      </section>
 
-    <RouterView v-else-if="signedIn" />
+      <RouterView v-else-if="signedIn" />
 
-    <section v-else class="auth-layout" aria-labelledby="welcome-heading">
-      <div class="auth-introduction">
-        <p class="eyebrow">Clear terms. Friendly outcomes.</p>
-        <h1 id="welcome-heading">Keep the bet clear between friends.</h1>
-        <p class="intro">
-          FriendlyFive records an agreement, helps resolve its outcome, and tracks
-          the resulting obligation. Payments stay between you and your friend.
-        </p>
-      </div>
-
-      <div class="auth-card">
-        <div class="auth-switcher" aria-label="Account action">
-          <button type="button" :class="{ active: mode === 'sign-in' }" :aria-pressed="mode === 'sign-in'" @click="selectMode('sign-in')">
-            Sign in
-          </button>
-          <button type="button" :class="{ active: mode === 'register' }" :aria-pressed="mode === 'register'" @click="selectMode('register')">
-            Register
-          </button>
+      <section v-else class="auth-layout" aria-labelledby="welcome-heading">
+        <div class="auth-introduction">
+          <p class="eyebrow">Clear terms. Friendly outcomes.</p>
+          <h1 id="welcome-heading">Keep the bet clear between friends.</h1>
+          <p class="intro">
+            FriendlyFive records an agreement, helps resolve its outcome, and tracks
+            the resulting obligation. Payments stay between you and your friend.
+          </p>
         </div>
 
-        <div class="form-heading">
-          <h2>{{ mode === "sign-in" ? "Welcome back" : "Create an account" }}</h2>
-          <p>{{ mode === "sign-in" ? "Enter the credentials for your FriendlyFive account." : "Choose the credentials you will use to return." }}</p>
-        </div>
+        <div class="auth-card">
+          <div class="auth-switcher" aria-label="Account action">
+            <button type="button" :class="{ active: mode === 'sign-in' }" :aria-pressed="mode === 'sign-in'" @click="selectMode('sign-in')">
+              Sign in
+            </button>
+            <button type="button" :class="{ active: mode === 'register' }" :aria-pressed="mode === 'register'" @click="selectMode('register')">
+              Register
+            </button>
+          </div>
 
-        <form class="auth-form" @submit.prevent="submitAuthentication">
+          <div class="form-heading">
+            <h2>{{ mode === "sign-in" ? "Welcome back" : "Create an account" }}</h2>
+            <p>{{ mode === "sign-in" ? "Enter the credentials for your FriendlyFive account." : "Choose the credentials you will use to return." }}</p>
+          </div>
+
+          <form class="auth-form" @submit.prevent="submitAuthentication">
           <label for="username">Username</label>
           <input id="username" v-model="username" name="username" type="text" autocomplete="username" required :disabled="submitting" />
 
@@ -231,8 +251,9 @@ onMounted(loadCurrentUser);
           <button class="button button-primary" type="submit" :disabled="submitting">
             {{ submitting ? (mode === "sign-in" ? "Signing in…" : "Creating account…") : (mode === "sign-in" ? "Sign in" : "Create account") }}
           </button>
-        </form>
-      </div>
-    </section>
+          </form>
+        </div>
+      </section>
+    </div>
   </main>
 </template>

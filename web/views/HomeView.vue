@@ -86,7 +86,7 @@ onMounted(loadAgreements);
 </script>
 
 <template>
-  <section class="page-content dashboard-page" aria-labelledby="home-heading">
+  <section class="page-content dashboard-page" aria-labelledby="home-heading" :aria-busy="loading">
     <div class="dashboard-heading">
       <div>
         <p class="eyebrow">My agreements</p>
@@ -100,9 +100,14 @@ onMounted(loadAgreements);
       </RouterLink>
     </div>
 
-    <p v-if="error" class="notice notice-error" role="alert">{{ error }}</p>
+    <section v-if="error" class="notice notice-error error-state" role="alert">
+      <p>{{ error }}</p>
+      <button class="button button-secondary retry-button" type="button" @click="loadAgreements">
+        Try again
+      </button>
+    </section>
 
-    <section v-if="loading" class="dashboard-state" aria-live="polite">
+    <section v-if="loading" class="dashboard-state" role="status" aria-live="polite">
       <h2>Loading agreements…</h2>
     </section>
 

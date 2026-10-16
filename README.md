@@ -28,6 +28,8 @@ the terms both participants accepted.
 - A dashboard that reports the effective agreement, resolution, or obligation
   status and names the participant whose acceptance is pending
 - Responsive phone layouts for the complete agreement lifecycle
+- Keyboard navigation, route-focus management, announced loading states, and
+  retry actions for recoverable loading failures
 - Persistent MongoDB state and backend authorization for every private workflow
 
 The maintained [core user journey](design/core-user-journey.md) demonstrates the
@@ -218,7 +220,7 @@ When an earlier artifact and a maintained specification differ, the files under
 FriendlyFive is publicly deployed at
 [friendly-five.mit-sdg.dev](https://friendly-five.mit-sdg.dev/). Agreement-version
 and outcome-report histories are implemented. Remaining P3 work includes
-production verification after each deployment, additional accessibility
-review, and further loading and visual polish. Broader dashboard
-filtering and policies for long-running completion disputes can be evaluated
-without expanding the core journey.
+production verification after each deployment, additional usability testing,
+and further visual polish. Broader dashboard filtering and policies for
+long-running completion disputes can be evaluated without expanding the core
+journey.
