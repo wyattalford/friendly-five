@@ -562,6 +562,12 @@ const GetResolution = endpoint(
         )
           .then(respond({ case: caseId, item, first, second, cutoff, resolutionRule, resolver: user, status }))
           .named("resolver"),
+        where(
+          Resolving._get({ case: caseId }),
+          no(Resolving._canView({ case: caseId, user }).is({ case: caseId })),
+        )
+          .then(respond({ error: "RESOLUTION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
         where(no(Resolving._get({ case: caseId }))).then(respond({ error: "RESOLUTION_NOT_FOUND" })).named("missing"),
       ),
   { input: { required: ["session", "case"] } },
@@ -682,6 +688,12 @@ const GetObligation = endpoint(
         where(ObligationTracking._get({ obligation }).is({ item, owing, recipient: user, description, status, currentReport, confirmedAt }))
           .then(respond({ obligation, item, owing, recipient: user, description, status, currentReport, confirmedAt }))
           .named("recipient"),
+        where(
+          ObligationTracking._get({ obligation }),
+          no(ObligationTracking._canView({ obligation, user }).is({ obligation })),
+        )
+          .then(respond({ error: "OBLIGATION_NOT_AUTHORIZED" }))
+          .named("unauthorized"),
         where(no(ObligationTracking._get({ obligation }))).then(respond({ error: "OBLIGATION_NOT_FOUND" })).named("missing"),
       ),
   { input: { required: ["session", "obligation"] } },

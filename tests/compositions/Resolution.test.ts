@@ -128,6 +128,12 @@ describe("agreement resolution boundary", () => {
     expect(outsiderLookup.status).toBe(403);
     expect(await outsiderLookup.json()).toEqual({ error: "FORBIDDEN" });
 
+    const directOutsiderLookup = await handler(
+      post("/resolutions/get", { case: caseRecord._id }, outsiderCookie),
+    );
+    expect(directOutsiderLookup.status).toBe(403);
+    expect(await directOutsiderLookup.json()).toEqual({ error: "FORBIDDEN" });
+
     const resolutionLookup = await handler(
       post("/resolutions/by-agreement", { agreement: proposal.agreement }, wyattCookie),
     );
@@ -214,6 +220,12 @@ describe("agreement resolution boundary", () => {
     );
     expect(outsiderObligationLookup.status).toBe(403);
     expect(await outsiderObligationLookup.json()).toEqual({ error: "FORBIDDEN" });
+
+    const directOutsiderObligationLookup = await handler(
+      post("/obligations/get", { obligation: obligationRecord._id }, outsiderCookie),
+    );
+    expect(directOutsiderObligationLookup.status).toBe(403);
+    expect(await directOutsiderObligationLookup.json()).toEqual({ error: "FORBIDDEN" });
 
     const resolverObligationLookup = await handler(
       post("/obligations/by-agreement", { agreement: proposal.agreement }, morganCookie),
