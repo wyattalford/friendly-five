@@ -22,6 +22,7 @@
   },
   "scripts": {
     "generate": "sync-engine artifacts pin",
+    "build": "bun run generate && bun run build:frontend",
     "check": "sync-engine check && sync-engine artifacts check && tsc --noEmit",
     "check:design": "sync-engine check-design design/concepts/*.md design/types.md design/compositions/*.md",
     "test": "bun test",
@@ -30,6 +31,7 @@
     "dev:backend": "bun --watch src/main.ts",
     "dev:frontend": "bunx --bun vite --host 127.0.0.1",
     "build:frontend": "bunx --bun vite build",
+    "preview": "bun run db:up && bun run build && NODE_ENV=production HOST=127.0.0.1 PORT=3000 PUBLIC_ORIGIN=http://127.0.0.1:3000 bun run start",
     "preview:frontend": "bunx --bun vite preview --host 127.0.0.1",
     "db:up": "podman compose up -d mongo",
     "db:shell": "podman compose exec mongo mongosh -u dev -p dev --authenticationDatabase admin",

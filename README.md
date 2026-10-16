@@ -124,6 +124,22 @@ bun run db:logs
 bun run db:shell
 ```
 
+### Preview the production build
+
+The production preview uses the same single-server layout as the class
+deployment. It generates the typed sync-engine artifacts, builds the Vue app,
+starts MongoDB, and serves the API and built pages from port 3000:
+
+```sh
+bun run preview
+```
+
+Open <http://127.0.0.1:3000>. The health check at
+<http://127.0.0.1:3000/health> returns `ok` only when MongoDB is reachable and
+the frontend build exists. Reload a nested Vue route during deployment checks
+to verify that the server returns the application entry page rather than a
+404.
+
 ### Reset to an empty database
 
 The core journey begins with an empty database. This command permanently removes
