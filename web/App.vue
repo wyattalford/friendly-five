@@ -231,8 +231,16 @@ watch(invitationToken, () => loadInvitationSetup());
 <template>
   <main class="page-shell">
     <a class="skip-link" href="#main-content">Skip to main content</a>
-    <header class="site-header">
+    <header v-if="signedIn" class="site-header">
       <RouterLink class="brand" :to="{ name: 'home' }" aria-label="FriendlyFive home">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <rect width="64" height="64" rx="16" fill="#285a7a" />
+          <circle cx="20" cy="20" r="6" fill="#fffdf8" />
+          <circle cx="44" cy="20" r="6" fill="#fffdf8" />
+          <circle cx="32" cy="32" r="6" fill="#fffdf8" />
+          <circle cx="20" cy="44" r="6" fill="#fffdf8" />
+          <circle cx="44" cy="44" r="6" fill="#fffdf8" />
+        </svg>
         FriendlyFive
       </RouterLink>
       <div v-if="signedIn" class="account-navigation">
@@ -241,7 +249,6 @@ watch(invitationToken, () => loadInvitationSetup());
           {{ submitting ? "Signing out…" : "Sign out" }}
         </button>
       </div>
-      <span v-else class="milestone">P2 MVP</span>
     </header>
 
     <div id="main-content" ref="mainContent" tabindex="-1">
@@ -267,7 +274,17 @@ watch(invitationToken, () => loadInvitationSetup());
           </template>
           <template v-else>
             <p class="eyebrow">Clear terms. Friendly outcomes.</p>
-            <h1 id="welcome-heading">Keep the bet clear between friends.</h1>
+            <div class="hero-title">
+              <svg class="hero-mark" viewBox="0 0 64 64" aria-hidden="true">
+                <rect width="64" height="64" rx="16" fill="#285a7a" />
+                <circle cx="20" cy="20" r="6" fill="#fffdf8" />
+                <circle cx="44" cy="20" r="6" fill="#fffdf8" />
+                <circle cx="32" cy="32" r="6" fill="#fffdf8" />
+                <circle cx="20" cy="44" r="6" fill="#fffdf8" />
+                <circle cx="44" cy="44" r="6" fill="#fffdf8" />
+              </svg>
+              <h1 id="welcome-heading">FriendlyFive</h1>
+            </div>
             <p class="intro">
               FriendlyFive records an agreement, helps resolve its outcome, and tracks
               the resulting obligation. Payments stay between you and your friend.
