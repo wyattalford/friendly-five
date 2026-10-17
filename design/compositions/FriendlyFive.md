@@ -2,7 +2,7 @@
 
 FriendlyFive records two friends' accepted wager terms, the final outcome, and
 the resulting fulfillment without processing the stake itself. The core journey
-starts with three registered users: Wyatt, Alex, and Morgan.
+starts with Alex registered and Wyatt joining through an email invitation.
 
 Authenticated requests must use the user returned for that request's session.
 The application authorizes each domain action from roles owned by the relevant
@@ -10,7 +10,8 @@ concept. It never accepts a user identifier supplied by the browser as proof of
 who is acting.
 
 The account endpoints are [registration](reaction:FriendlyFive.Accounts.Register),
-[sign-in](reaction:FriendlyFive.Accounts.SignIn), and
+[invited-account registration](reaction:FriendlyFive.Accounts.RegisterInvited),
+[sign-in](reaction:FriendlyFive.Accounts.SignIn),
 [current-user lookup](reaction:FriendlyFive.Accounts.CurrentUser), and
 [sign-out](reaction:FriendlyFive.Accounts.SignOut). Browser requests carry the
 session in a secure HTTP-only cookie, while the logical endpoints still require
@@ -22,9 +23,19 @@ resolution status and, when one exists, its current obligation status so the
 interface can show progress beyond agreement acceptance. Pending entries also
 identify the current version's author so the interface can name the other
 participant whose acceptance is required. The proposal flow
-resolves counterpart and resolver usernames before invoking
+resolves an existing counterpart by username or email and resolves the resolver
+username before invoking
 [Agreeing.propose](reaction:FriendlyFive.Agreements.Propose), then creates an
 active Linking reference owned by the initiator and returns its opaque token.
+A counterpart email without an active account is reserved by Authenticating
+and used as the proposal's counterpart identity. The holder of that proposal's
+unguessable link chooses a username and activates that exact identity before the
+private terms become visible. Ordinary registration cannot claim a reserved email.
+The public [invitation setup](reaction:FriendlyFive.Agreements.InvitationSetup)
+returns only the inviter username, counterpart email, any active counterpart
+username, and whether account
+creation is needed, allowing the browser to present the correct authentication
+prompt without exposing proposal terms.
 A supplied nonblank resolver username must identify an account. Participants
 may submit replacement terms through
 [agreement revision](reaction:FriendlyFive.Agreements.Revise); the new version
@@ -34,6 +45,9 @@ pending, an authorized participant can retrieve its active invitation through
 The current version's other participant may
 [reject it](reaction:FriendlyFive.Agreements.Reject), while its author may
 [withdraw it](reaction:FriendlyFive.Agreements.Withdraw).
+When the initial author withdraws a proposal before its invited counterpart
+activates, [withdrawal releases the reserved identity](reaction:FriendlyFive.Agreements.WithdrawnInvitationReleasesReservedCounterpart)
+so the abandoned email can be registered or invited again.
 Participants
 and an agreed resolver can read the accepted terms through
 [agreement review](reaction:FriendlyFive.Agreements.Get). The
@@ -66,10 +80,12 @@ the cutoff has passed.
 
 ```endpoints
 FriendlyFive.Accounts.Register at /auth/register
+FriendlyFive.Accounts.RegisterInvited at /auth/register-invited
 FriendlyFive.Accounts.SignIn at /auth/sign-in
 FriendlyFive.Accounts.CurrentUser at /auth/current
 FriendlyFive.Accounts.SignOut at /auth/sign-out
 FriendlyFive.Agreements.ListAgreements at /agreements/list
+FriendlyFive.Agreements.InvitationSetup at /agreements/invite/setup
 FriendlyFive.Agreements.Propose at /agreements/propose
 FriendlyFive.Agreements.Revise at /agreements/revise
 FriendlyFive.Agreements.GetInvitationLink at /agreements/link
@@ -104,6 +120,15 @@ Blank(value: String) : Boolean
 
 NonBlank(value: String) : Boolean
   Reports whether an optional username contains at least one non-whitespace character.
+
+Different(left: String, right: String) : Boolean
+  Reports whether two strings differ.
+
+EmailAddress(value: String) : Boolean
+  Reports whether a string has the basic shape of an email address.
+
+NotEmailAddress(value: String) : Boolean
+  Reports whether a string does not have the basic shape of an email address.
 ```
 
 The resolution endpoints are [case review](reaction:FriendlyFive.Outcomes.GetResolution),

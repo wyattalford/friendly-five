@@ -21,6 +21,8 @@ external User
 
 AgreementStatus is PENDING or ACCEPTED or REJECTED or WITHDRAWN
   The lifecycle state of an agreement.
+ProposalValidity is VALID or INVALID
+  A marker returned when prospective proposal terms pass validation.
 ```
 
 ## State
@@ -152,6 +154,8 @@ withdraw(user: User, agreement: Agreement, version: Version) : returns ()
 ## Queries
 
 ```queries
+_validProposal(claim: String, deadline: DateTime, initiatorStake: String, counterpartStake: String, resolutionRule: String) : optional (validity: ProposalValidity)
+  Answers validity VALID when the supplied required terms are nonblank and deadline is in the future, or no row otherwise.
 _get(agreement: Agreement) : optional (initiator: User, counterpart: User, status: AgreementStatus, currentVersion: Version, acceptedAt?: DateTime)
   Answers the agreement and its current state, or no row when the agreement is unknown.
 _version(version: Version) : optional (agreement: Agreement, number: Number, author: User, claim: String, deadline: DateTime, initiatorStake: String, counterpartStake: String, exceptions: String, resolutionRule: String, resolver?: User)

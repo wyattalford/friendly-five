@@ -12,8 +12,11 @@ the terms both participants accepted.
 
 ## Implemented MVP
 
-- Account registration, sign-in, session restoration, and sign-out
-- Two-party agreement proposals with versioned counterproposals
+- Registration with a unique email and username, sign-in, session restoration,
+  and sign-out
+- Two-party agreement proposals addressed to an existing username or email,
+  with versioned counterproposals
+- Shareable proposals for counterparts who create their account from the invitation
 - Chronological agreement-version history on pending and accepted agreements
 - Optional designated resolvers agreed upon as part of the terms
 - Opaque invitation links that identify an agreement without granting access
@@ -35,8 +38,8 @@ the terms both participants accepted.
 - Persistent MongoDB state and backend authorization for every private workflow
 
 The maintained [core user journey](design/core-user-journey.md) demonstrates the
-complete path from an empty database through registration, agreement,
-disagreement, resolver decision, and confirmed obligation completion.
+complete path from an empty database through an email invitation, registration,
+agreement, outcome confirmation, and confirmed obligation completion.
 A narrated walkthrough of this journey is available in the
 [P2 demo recording](https://drive.google.com/file/d/1LJoGqUKwzpq3sLEaH6UJ4NyfNUX2rSIS/view?usp=sharing).
 
@@ -195,6 +198,13 @@ tokens identify an agreement, but possession of a token does not authorize an
 outsider to read or change it. Obligation details remain limited to the owing
 person and recipient.
 
+When a proposal names a counterpart email without an account, FriendlyFive
+reserves that normalized email and binds it to the proposal's opaque invitation.
+The link holder chooses their own username while activating that identity.
+Proposal terms remain private until the activated account is authenticated, and
+ordinary registration cannot claim a reserved email. Email ownership is not yet
+verified, so invitation links must be shared privately.
+
 Evidence photos are compressed in the browser and validated again by the
 backend before MongoDB persistence. Only the agreement participants and
 designated resolver can retrieve resolution photos. Each eligible submission
@@ -229,6 +239,6 @@ FriendlyFive is publicly deployed at
 [friendly-five.mit-sdg.dev](https://friendly-five.mit-sdg.dev/). Agreement-version
 and outcome-report histories are implemented. Remaining P3 work includes
 production verification after each deployment, additional usability testing,
-and further visual polish. Broader dashboard filtering and policies for
+email verification and delivery, and further visual polish. Broader dashboard filtering and policies for
 long-running completion disputes can be evaluated without expanding the core
 journey.

@@ -14,5 +14,8 @@ export const applicationConceptSet = conceptSet({
 }, {
   Blank: ({ value }: { value: string }) => value.trim() === "",
   NonBlank: ({ value }: { value: string }) => value.trim() !== "",
+  Different: ({ left, right }: { left: string; right: string }) => left !== right,
+  EmailAddress: ({ value }: { value: string }) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()),
+  NotEmailAddress: ({ value }: { value: string }) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()),
 });
 export const { concepts, computations } = applicationConceptSet;

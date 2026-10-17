@@ -9,6 +9,7 @@ type NoticeKind = "error" | "success";
 const mode = ref<AuthMode>("sign-in");
 const route = useRoute();
 const username = ref("");
+const email = ref("");
 const password = ref("");
 const showPassword = ref(false);
 const signedInUserId = ref("");
@@ -20,6 +21,14 @@ const initializing = ref(true);
 const passwordInput = ref<HTMLInputElement | null>(null);
 const mainContent = ref<HTMLElement | null>(null);
 const initialViewRendered = ref(false);
+const invitationSetup = ref<{
+  initiatorUsername: string;
+  counterpartUsername?: string;
+  counterpartEmail: string;
+  requiresRegistration: boolean;
+} | null>(null);
+
+const invitationToken = computed(() => String(route.params.token ?? ""));
 
 const signedIn = computed(() => signedInUserId.value !== "");
 provide("currentUserId", readonly(signedInUserId));
@@ -51,6 +60,25 @@ function selectMode(nextMode: AuthMode): void {
   notice.value = "";
 }
 
+async function loadInvitationSetup(): Promise<void> {
+  invitationSetup.value = null;
+  if (invitationToken.value === "" || signedIn.value) return;
+  try {
+    const result = await api.agreements.invite.setup({ token: invitationToken.value });
+    if ("error" in result) {
+      showNotice("This invitation is invalid or has been revoked.", "error");
+      return;
+    }
+    invitationSetup.value = result;
+    username.value = result.counterpartUsername ?? "";
+    email.value = result.counterpartEmail;
+    mode.value = result.requiresRegistration ? "register" : "sign-in";
+    notice.value = "";
+  } catch {
+    showNotice("FriendlyFive could not check this invitation. Try again.", "error");
+  }
+}
+
 function showSignedInUser(user: string, nextUsername: string): void {
   signedInUserId.value = user;
   signedInUsername.value = nextUsername;
@@ -62,11 +90,11 @@ function clearSignedInUser(): void {
 }
 
 function errorMessage(error: string, action: AuthMode | "sign-out"): string {
-  if (error === "CONFLICT") return "That username is already registered.";
+  if (error === "CONFLICT") return "That username or email is already in use.";
   if (error === "INVALID_REQUEST" && action === "sign-in") {
     return "The username or password is incorrect.";
   }
-  if (error === "INVALID_REQUEST") return "Enter a username and password.";
+  if (error === "INVALID_REQUEST") return "Enter a username, valid email, and password.";
   if (error === "UNAUTHORIZED") return "This session is no longer active.";
   if (error === "NETWORK_ERROR") return "FriendlyFive could not reach the server. Try again.";
   return "FriendlyFive could not complete that request. Try again.";
@@ -84,8 +112,16 @@ async function refreshCurrentUser(): Promise<boolean> {
 
 async function submitAuthentication(): Promise<void> {
   const submittedUsername = username.value.trim();
-  if (submittedUsername === "" || password.value.trim() === "") {
-    showNotice("Enter a username and password.", "error");
+  const submittedEmail = email.value.trim();
+  if (
+    submittedUsername === "" ||
+    password.value.trim() === "" ||
+    (mode.value === "register" && submittedEmail === "")
+  ) {
+    showNotice(
+      mode.value === "register" ? "Enter a username, email, and password." : "Enter a username and password.",
+      "error",
+    );
     return;
   }
 
@@ -93,7 +129,31 @@ async function submitAuthentication(): Promise<void> {
   notice.value = "";
   try {
     if (mode.value === "register") {
-      const result = await api.auth.register({ username: submittedUsername, password: password.value });
+      if (invitationSetup.value?.requiresRegistration) {
+        const result = await api.auth["register-invited"]({
+          token: invitationToken.value,
+          username: submittedUsername,
+          password: password.value,
+        });
+        if ("error" in result) {
+          showNotice(errorMessage(result.error, "register"), "error");
+          return;
+        }
+        password.value = "";
+        showPassword.value = false;
+        if (!(await refreshCurrentUser())) {
+          showNotice("The invited account was created, but its session could not be loaded. Sign in.", "error");
+          return;
+        }
+        invitationSetup.value = null;
+        notice.value = "";
+        return;
+      }
+      const result = await api.auth.register({
+        username: submittedUsername,
+        email: submittedEmail,
+        password: password.value,
+      });
       if ("error" in result) {
         showNotice(errorMessage(result.error, "register"), "error");
         return;
@@ -155,7 +215,7 @@ async function signOut(): Promise<void> {
 
 async function loadCurrentUser(): Promise<void> {
   try {
-    await refreshCurrentUser();
+    if (!(await refreshCurrentUser())) await loadInvitationSetup();
   } catch {
     clearSignedInUser();
     showNotice("FriendlyFive could not check your session. Sign in to continue.", "error");
@@ -165,6 +225,7 @@ async function loadCurrentUser(): Promise<void> {
 }
 
 onMounted(loadCurrentUser);
+watch(invitationToken, () => loadInvitationSetup());
 </script>
 
 <template>
@@ -193,12 +254,25 @@ onMounted(loadCurrentUser);
 
       <section v-else class="auth-layout" aria-labelledby="welcome-heading">
         <div class="auth-introduction">
-          <p class="eyebrow">Clear terms. Friendly outcomes.</p>
-          <h1 id="welcome-heading">Keep the bet clear between friends.</h1>
-          <p class="intro">
-            FriendlyFive records an agreement, helps resolve its outcome, and tracks
-            the resulting obligation. Payments stay between you and your friend.
-          </p>
+          <template v-if="invitationSetup">
+            <p class="eyebrow">Agreement invitation</p>
+            <h1 id="welcome-heading">{{ invitationSetup.initiatorUsername }} invited you to FriendlyFive.</h1>
+            <p class="intro" v-if="invitationSetup.requiresRegistration">
+              Create an account for <strong>{{ invitationSetup.counterpartEmail }}</strong> and choose
+              your own username. The invitation will open automatically afterward.
+            </p>
+            <p class="intro" v-else>
+              Sign in as <strong>{{ invitationSetup.counterpartUsername }}</strong> to review the proposal.
+            </p>
+          </template>
+          <template v-else>
+            <p class="eyebrow">Clear terms. Friendly outcomes.</p>
+            <h1 id="welcome-heading">Keep the bet clear between friends.</h1>
+            <p class="intro">
+              FriendlyFive records an agreement, helps resolve its outcome, and tracks
+              the resulting obligation. Payments stay between you and your friend.
+            </p>
+          </template>
         </div>
 
         <div class="auth-card">
@@ -219,6 +293,20 @@ onMounted(loadCurrentUser);
           <form class="auth-form" @submit.prevent="submitAuthentication">
           <label for="username">Username</label>
           <input id="username" v-model="username" name="username" type="text" autocomplete="username" required :disabled="submitting" />
+
+          <template v-if="mode === 'register'">
+            <label for="email">Email</label>
+            <input
+              id="email"
+              v-model="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+              :readonly="invitationSetup?.requiresRegistration"
+              :disabled="submitting"
+            />
+          </template>
 
           <label for="password">Password</label>
           <div class="password-field">

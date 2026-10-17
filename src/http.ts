@@ -6,6 +6,11 @@ export const policy = httpPolicy({
   publicErrors: {
     INVALID_CREDENTIALS: "INVALID_REQUEST",
     USERNAME_TAKEN: "CONFLICT",
+    EMAIL_TAKEN: "CONFLICT",
+    RESERVATION_NOT_AVAILABLE: "CONFLICT",
+    ACTIVATION_NOT_AVAILABLE: "CONFLICT",
+    INVITATION_ALREADY_CLAIMED: "CONFLICT",
+    INVITED_COUNTERPART_RESOLVER_UNSUPPORTED: "INVALID_REQUEST",
     UNKNOWN_SESSION: "UNAUTHORIZED",
     PROPOSAL_SAME_PARTICIPANT: "INVALID_REQUEST",
     PROPOSAL_INVALID_TERMS: "INVALID_REQUEST",
@@ -74,7 +79,10 @@ export const policy = httpPolicy({
     session: {
       name: "friendlyfive-session",
       input: "session",
-      issue: [{ path: "/auth/sign-in", value: "session", expires: "expiresAt" }],
+      issue: [
+        { path: "/auth/sign-in", value: "session", expires: "expiresAt" },
+        { path: "/auth/register-invited", value: "session", expires: "expiresAt" },
+      ],
       clear: ["/auth/sign-out"],
     },
   },

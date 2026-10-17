@@ -97,6 +97,32 @@ export class AgreeingConcept {
         this.versions = db.collection<VersionDocument>('agreeing.versions');
     }
 
+    async _validProposal({
+        claim,
+        deadline,
+        initiatorStake,
+        counterpartStake,
+        resolutionRule,
+    }: {
+        claim: string;
+        deadline: Date;
+        initiatorStake: string;
+        counterpartStake: string;
+        resolutionRule: string;
+    }) {
+        const due = asDate(deadline);
+        return validTerms(
+            claim,
+            initiatorStake,
+            counterpartStake,
+            resolutionRule,
+        ) &&
+            !Number.isNaN(due.getTime()) &&
+            due.getTime() > Date.now()
+            ? [{ validity: 'VALID' as const }]
+            : [];
+    }
+
     async propose({
         initiator,
         counterpart,

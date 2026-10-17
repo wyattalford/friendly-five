@@ -4,7 +4,7 @@ import { RouterLink, useRouter } from "vue-router";
 import { api } from "../api.ts";
 
 const router = useRouter();
-const counterpartUsername = ref("");
+const counterpartIdentifier = ref("");
 const resolverUsername = ref("");
 const claim = ref("");
 const deadline = ref("");
@@ -15,7 +15,7 @@ const resolutionRule = ref("");
 const submitting = ref(false);
 const error = ref("");
 const copied = ref(false);
-const invitation = ref<{ agreement: string; version: string; link: string; token: string } | null>(null);
+const invitation = ref<{ agreement: string; version: string; link: string; token: string; requiresRegistration: boolean } | null>(null);
 
 const invitationUrl = computed(() => {
   if (invitation.value === null) return "";
@@ -28,8 +28,9 @@ const invitationUrl = computed(() => {
 
 function proposalError(code: string): string {
   if (code === "NOT_FOUND") return "The counterpart or resolver username was not found.";
+  if (code === "CONFLICT") return "That email already has an account or a pending invitation.";
   if (code === "INVALID_REQUEST") {
-    return "Check the required terms and choose a resolution deadline in the future.";
+    return "Check the required terms and future deadline. If the counterpart is new, leave the resolver blank and add one after they create their account.";
   }
   if (code === "UNAUTHORIZED") return "Your session ended. Sign in and try again.";
   if (code === "NETWORK_ERROR") return "FriendlyFive could not reach the server. Try again.";
@@ -48,7 +49,7 @@ async function submitProposal(): Promise<void> {
   submitting.value = true;
   try {
     const result = await api.agreements.propose({
-      counterpartUsername: counterpartUsername.value.trim(),
+      counterpartIdentifier: counterpartIdentifier.value.trim(),
       resolverUsername: resolverUsername.value.trim(),
       claim: claim.value.trim(),
       deadline: due.toISOString(),
@@ -84,8 +85,14 @@ async function copyInvitation(): Promise<void> {
     <p class="eyebrow">Proposal created</p>
     <h1 id="created-heading">Send the invitation to your counterpart.</h1>
     <p class="intro">
-      Your proposal counts as your approval of this version. The terms remain pending
-      until the other participant accepts them.
+      <template v-if="invitation.requiresRegistration">
+        This email did not have an account, so FriendlyFive associated it with this invitation.
+        Your counterpart will choose their own username before reviewing the proposal.
+      </template>
+      <template v-else>
+        Your proposal counts as your approval of this version. The terms remain pending
+        until the other participant accepts them.
+      </template>
     </p>
 
     <div class="invitation-box">
@@ -126,9 +133,9 @@ async function copyInvitation(): Promise<void> {
         <legend>People</legend>
         <div class="field-grid">
           <div class="form-field">
-            <label for="counterpart">Counterpart username</label>
-            <input id="counterpart" v-model="counterpartUsername" required autocomplete="off" :disabled="submitting" />
-            <p class="field-help">This person will review and accept the proposal.</p>
+            <label for="counterpart">Counterpart email or username</label>
+            <input id="counterpart" v-model="counterpartIdentifier" required autocomplete="off" :disabled="submitting" />
+            <p class="field-help">Use a username for an existing account, or an email to invite someone new.</p>
           </div>
           <div class="form-field">
             <label for="resolver">Resolver username <span>optional</span></label>

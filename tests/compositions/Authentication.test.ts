@@ -50,7 +50,7 @@ describe("browser authentication boundary", () => {
     const handler = createHttpHandler({ application, gateway, policy });
 
     const registered = await handler(
-      post("/auth/register", { username: "wyatt", password: "safe password" }),
+      post("/auth/register", { username: "wyatt", email: "wyatt@example.com", password: "safe password" }),
     );
     expect(registered.status).toBe(200);
 
@@ -72,8 +72,9 @@ describe("browser authentication boundary", () => {
 
     const current = await handler(post("/auth/current", {}, cookie));
     expect(current.status).toBe(200);
-    const currentBody = (await current.json()) as { user: string; username: string };
+    const currentBody = (await current.json()) as { user: string; username: string; email: string };
     expect(currentBody.username).toBe("wyatt");
+    expect(currentBody.email).toBe("wyatt@example.com");
     expect(
       (await database.collection("authenticating.users").findOne({ username: "wyatt" }))?._id,
     ).toBe(currentBody.user);
@@ -91,4 +92,5 @@ describe("browser authentication boundary", () => {
     expect(reused.status).toBe(401);
     expect(await reused.json()).toEqual({ error: "UNAUTHORIZED" });
   });
+
 });

@@ -44,13 +44,118 @@ describe("agreement invitation boundary", () => {
     await client.close();
   });
 
+  test("lets a person invited by email choose a username before reviewing", async () => {
+    const { application, gateway } = createFriendlyFive(database);
+    const handler = createHttpHandler({ application, gateway, policy });
+
+    expect((await handler(post("/auth/register", { username: "wyatt", email: "wyatt@example.com", password: "safe password" }))).status).toBe(200);
+    const signedIn = await handler(post("/auth/sign-in", { username: "wyatt", password: "safe password" }));
+    const wyattCookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
+    if (wyattCookie === undefined) throw new Error("Expected Wyatt's session cookie.");
+
+    expect((await handler(post("/auth/register", { username: "morgan", email: "morgan@example.com", password: "safe password" }))).status).toBe(200);
+
+    const termsForNewUser = {
+      counterpartIdentifier: "new-alex@example.com",
+      claim: "MIT wins its next game",
+      deadline: new Date(Date.now() + 60_000).toISOString(),
+      initiatorStake: "buy lunch",
+      counterpartStake: "buy coffee",
+      exceptions: "A cancellation is void",
+      resolutionRule: "Use the official box score",
+    };
+    const invalidProspective = await handler(post("/agreements/propose", {
+      ...termsForNewUser,
+      counterpartIdentifier: "invalid@example.com",
+      claim: "",
+    }, wyattCookie));
+    expect(invalidProspective.status).toBe(400);
+    expect(await database.collection("authenticating.users").findOne({ email: "invalid@example.com" })).toBeNull();
+
+    const prematureResolver = await handler(post("/agreements/propose", {
+      ...termsForNewUser,
+      resolverUsername: "morgan",
+    }, wyattCookie));
+    expect(prematureResolver.status).toBe(400);
+    expect(await database.collection("authenticating.users").findOne({ email: "new-alex@example.com" })).toBeNull();
+
+    const abandonedResponse = await handler(post("/agreements/propose", {
+      ...termsForNewUser,
+      counterpartIdentifier: "abandoned@example.com",
+    }, wyattCookie));
+    expect(abandonedResponse.status).toBe(200);
+    const abandoned = await abandonedResponse.json() as { agreement: string; version: string };
+    expect(await database.collection("authenticating.users").findOne({ email: "abandoned@example.com" })).not.toBeNull();
+    const withdrawn = await handler(post("/agreements/withdraw", abandoned, wyattCookie));
+    expect(withdrawn.status).toBe(200);
+    expect(await database.collection("authenticating.users").findOne({ email: "abandoned@example.com" })).toBeNull();
+
+    const proposed = await handler(post("/agreements/propose", termsForNewUser, wyattCookie));
+    expect(proposed.status).toBe(200);
+    const invitation = await proposed.json() as {
+      agreement: string;
+      version: string;
+      token: string;
+      requiresRegistration: boolean;
+    };
+    expect(invitation.requiresRegistration).toBe(true);
+
+    const reserved = await database.collection("authenticating.users").findOne({ email: "new-alex@example.com" });
+    expect(reserved).toMatchObject({ email: "new-alex@example.com" });
+    expect(reserved).not.toHaveProperty("username");
+    expect(reserved).not.toHaveProperty("passwordVerifier");
+
+    const setup = await handler(post("/agreements/invite/setup", { token: invitation.token }));
+    expect(setup.status).toBe(200);
+    expect(await setup.json()).toEqual({
+      initiatorUsername: "wyatt",
+      counterpartEmail: "new-alex@example.com",
+      requiresRegistration: true,
+    });
+
+    const activated = await handler(post("/auth/register-invited", {
+      token: invitation.token,
+      username: "alex-chose-this",
+      password: "safe password",
+    }));
+    expect(activated.status).toBe(200);
+    const invitedCookie = activated.headers.get("set-cookie")?.split(";", 1)[0];
+    if (invitedCookie === undefined) throw new Error("Expected the invited account session cookie.");
+
+    const current = await handler(post("/auth/current", {}, invitedCookie));
+    expect(current.status).toBe(200);
+    expect(await current.json()).toMatchObject({ username: "alex-chose-this", user: reserved?._id });
+
+    const review = await handler(post("/agreements/invite", { token: invitation.token }, invitedCookie));
+    expect(review.status).toBe(200);
+    expect(await review.json()).toMatchObject({
+      agreement: invitation.agreement,
+      counterpartUsername: "alex-chose-this",
+      status: "PENDING",
+    });
+
+    const accepted = await handler(post("/agreements/accept", {
+      agreement: invitation.agreement,
+      version: invitation.version,
+    }, invitedCookie));
+    expect(accepted.status).toBe(200);
+
+    const claimedSetup = await handler(post("/agreements/invite/setup", { token: invitation.token }));
+    expect(claimedSetup.status).toBe(200);
+    expect(await claimedSetup.json()).toMatchObject({
+      counterpartUsername: "alex-chose-this",
+      counterpartEmail: "new-alex@example.com",
+      requiresRegistration: false,
+    });
+  });
+
   test("creates, authorizes, and revokes an invitation", async () => {
     const { application, gateway } = createFriendlyFive(database);
     const handler = createHttpHandler({ application, gateway, policy });
 
     async function registerAndSignIn(username: string): Promise<string> {
       const registered = await handler(
-        post("/auth/register", { username, password: "safe password" }),
+        post("/auth/register", { username, email: `${username}@example.com`, password: "safe password" }),
       );
       expect(registered.status).toBe(200);
       const signedIn = await handler(
@@ -68,7 +173,7 @@ describe("agreement invitation boundary", () => {
     const outsiderCookie = await registerAndSignIn("casey");
 
     const terms = {
-      counterpartUsername: "alex",
+      counterpartIdentifier: "alex",
       claim: "Georgia Tech wins by more than seven points",
       deadline: new Date(Date.now() + 60_000).toISOString(),
       initiatorStake: "lunch up to $15",
@@ -88,6 +193,13 @@ describe("agreement invitation boundary", () => {
     expect(await missingResolver.json()).toEqual({ error: "NOT_FOUND" });
     expect(await database.collection("agreeing.agreements").countDocuments()).toBe(0);
 
+    const missingCounterpart = await handler(
+      post("/agreements/propose", { ...terms, counterpartIdentifier: "unknown-person" }, wyattCookie),
+    );
+    expect(missingCounterpart.status).toBe(404);
+    expect(await missingCounterpart.json()).toEqual({ error: "NOT_FOUND" });
+    expect(await database.collection("agreeing.agreements").countDocuments()).toBe(0);
+
     const proposed = await handler(
       post("/agreements/propose", { ...terms, resolverUsername: "morgan" }, wyattCookie),
     );
@@ -102,6 +214,17 @@ describe("agreement invitation boundary", () => {
     expect(invitation.version).toMatch(/^[0-9a-f-]{36}$/);
     expect(invitation.link).toMatch(/^[0-9a-f-]{36}$/);
     expect(invitation.token).toMatch(/^[0-9a-f-]{36}$/);
+
+    const existingAccountSetup = await handler(
+      post("/agreements/invite/setup", { token: invitation.token }),
+    );
+    expect(existingAccountSetup.status).toBe(200);
+    expect(await existingAccountSetup.json()).toEqual({
+      initiatorUsername: "wyatt",
+      counterpartUsername: "alex",
+      counterpartEmail: "alex@example.com",
+      requiresRegistration: false,
+    });
 
     const participantDashboard = await handler(
       post("/agreements/list", {}, alexCookie),
@@ -295,7 +418,7 @@ describe("agreement invitation boundary", () => {
     const handler = createHttpHandler({ application, gateway, policy });
 
     async function registerAndSignIn(username: string): Promise<string> {
-      expect((await handler(post("/auth/register", { username, password: "safe password" }))).status).toBe(200);
+      expect((await handler(post("/auth/register", { username, email: `${username}@example.com`, password: "safe password" }))).status).toBe(200);
       const signedIn = await handler(post("/auth/sign-in", { username, password: "safe password" }));
       expect(signedIn.status).toBe(200);
       const cookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
@@ -308,7 +431,7 @@ describe("agreement invitation boundary", () => {
     const morganCookie = await registerAndSignIn("morgan");
     const deadline = new Date(Date.now() + 60_000).toISOString();
     const terms = {
-      counterpartUsername: "alex",
+      counterpartIdentifier: "alex@example.com",
       claim: "Wyatt wins the ping-pong match",
       deadline,
       initiatorStake: "dinner",
@@ -432,7 +555,7 @@ describe("agreement invitation boundary", () => {
     const handler = createHttpHandler({ application, gateway, policy });
 
     async function registerAndSignIn(username: string): Promise<string> {
-      expect((await handler(post("/auth/register", { username, password: "safe password" }))).status).toBe(200);
+      expect((await handler(post("/auth/register", { username, email: `${username}@example.com`, password: "safe password" }))).status).toBe(200);
       const signedIn = await handler(post("/auth/sign-in", { username, password: "safe password" }));
       expect(signedIn.status).toBe(200);
       const cookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
@@ -443,7 +566,7 @@ describe("agreement invitation boundary", () => {
     const wyattCookie = await registerAndSignIn("wyatt");
     const alexCookie = await registerAndSignIn("alex");
     const terms = {
-      counterpartUsername: "alex",
+      counterpartIdentifier: "alex@example.com",
       resolverUsername: "",
       deadline: new Date(Date.now() + 60_000).toISOString(),
       initiatorStake: "Wyatt buys lunch",
@@ -521,7 +644,7 @@ describe("agreement invitation boundary", () => {
 
     expect((await handler(post(
       "/auth/register",
-      { username: "wyatt", password: "safe password" },
+      { username: "wyatt", email: "wyatt@example.com", password: "safe password" },
     ))).status).toBe(200);
     const signedIn = await handler(post(
       "/auth/sign-in",

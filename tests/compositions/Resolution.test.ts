@@ -51,7 +51,7 @@ describe("agreement resolution boundary", () => {
 
     async function registerAndSignIn(username: string): Promise<string> {
       expect(
-        (await handler(post("/auth/register", { username, password: "safe password" }))).status,
+        (await handler(post("/auth/register", { username, email: `${username}@example.com`, password: "safe password" }))).status,
       ).toBe(200);
       const signedIn = await handler(
         post("/auth/sign-in", { username, password: "safe password" }),
@@ -89,7 +89,7 @@ describe("agreement resolution boundary", () => {
       post(
         "/agreements/propose",
         {
-          counterpartUsername: "alex",
+          counterpartIdentifier: "alex@example.com",
           resolverUsername: "morgan",
           claim: "Georgia Tech wins by more than seven points",
           deadline: new Date(Date.now() + 60_000).toISOString(),
@@ -412,7 +412,7 @@ describe("agreement resolution boundary", () => {
     const handler = createHttpHandler({ application, gateway, policy });
 
     async function registerAndSignIn(username: string): Promise<string> {
-      expect((await handler(post("/auth/register", { username, password: "safe password" }))).status).toBe(200);
+      expect((await handler(post("/auth/register", { username, email: `${username}@example.com`, password: "safe password" }))).status).toBe(200);
       const signedIn = await handler(post("/auth/sign-in", { username, password: "safe password" }));
       expect(signedIn.status).toBe(200);
       const cookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
@@ -428,7 +428,7 @@ describe("agreement resolution boundary", () => {
         post(
           "/agreements/propose",
           {
-            counterpartUsername: "alex",
+            counterpartIdentifier: "alex",
             resolverUsername: "",
             claim: `The ${outcome.toLowerCase()} scenario occurs`,
             deadline: new Date(Date.now() + 60_000).toISOString(),
@@ -502,7 +502,7 @@ describe("agreement resolution boundary", () => {
     const handler = createHttpHandler({ application, gateway, policy });
 
     async function registerAndSignIn(username: string): Promise<string> {
-      expect((await handler(post("/auth/register", { username, password: "safe password" }))).status).toBe(200);
+      expect((await handler(post("/auth/register", { username, email: `${username}@example.com`, password: "safe password" }))).status).toBe(200);
       const signedIn = await handler(post("/auth/sign-in", { username, password: "safe password" }));
       expect(signedIn.status).toBe(200);
       const cookie = signedIn.headers.get("set-cookie")?.split(";", 1)[0];
@@ -517,7 +517,7 @@ describe("agreement resolution boundary", () => {
       const response = await handler(post(
         "/agreements/propose",
         {
-          counterpartUsername: "alex",
+          counterpartIdentifier: "alex@example.com",
           resolverUsername,
           claim,
           deadline: new Date(Date.now() + 60_000).toISOString(),
