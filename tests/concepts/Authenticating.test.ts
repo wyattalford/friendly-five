@@ -73,6 +73,20 @@ describe("Authenticating", () => {
     await expect(database.collection("authenticating.sessions").findOne({ _id: session })).resolves.toBeNull();
   });
 
+  test("does not sign in an account without its required email", async () => {
+    const authenticating = new AuthenticatingConcept(database);
+    const passwordVerifier = await Bun.password.hash("safe password", { algorithm: "argon2id" });
+    await database.collection("authenticating.users").insertOne({
+      _id: "incomplete-user",
+      username: "incomplete",
+      passwordVerifier,
+    });
+
+    await expect(
+      authenticating.signIn({ username: "incomplete", password: "safe password" }),
+    ).rejects.toThrow(InvalidCredentials);
+  });
+
   test("reserves an email and lets the invitee choose a username exactly once", async () => {
     const authenticating = new AuthenticatingConcept(database);
     const { user } = await authenticating.reserve({ email: "New.Friend@Example.com" });

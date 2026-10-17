@@ -93,4 +93,32 @@ describe("browser authentication boundary", () => {
     expect(await reused.json()).toEqual({ error: "UNAUTHORIZED" });
   });
 
+  test("rejects an existing session for an account without its required email", async () => {
+    const { application, gateway } = createFriendlyFive(database);
+    const handler = createHttpHandler({ application, gateway, policy });
+    const passwordVerifier = await Bun.password.hash("safe password", { algorithm: "argon2id" });
+    await database.collection("authenticating.users").insertOne({
+      _id: "incomplete-user",
+      username: "incomplete",
+      passwordVerifier,
+    });
+    await database.collection("authenticating.sessions").insertOne({
+      _id: "incomplete-session",
+      user: "incomplete-user",
+      expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+    });
+
+    const current = await handler(
+      post("/auth/current", {}, "__Host-friendlyfive-session=incomplete-session"),
+    );
+    expect(current.status).toBe(401);
+    expect(await current.json()).toEqual({ error: "UNAUTHORIZED" });
+
+    const signIn = await handler(
+      post("/auth/sign-in", { username: "incomplete", password: "safe password" }),
+    );
+    expect(signIn.status).toBe(400);
+    expect(await signIn.json()).toEqual({ error: "INVALID_REQUEST" });
+  });
+
 });

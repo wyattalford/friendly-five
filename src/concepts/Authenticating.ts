@@ -155,7 +155,7 @@ export class AuthenticatingConcept {
   }
 
   async signIn({ username, password }: { username: string; password: string }) {
-    const account = await this.users.findOne({ username });
+    const account = await this.users.findOne({ username, email: { $type: "string" } });
     if (account?.passwordVerifier === undefined || !(await Bun.password.verify(password, account.passwordVerifier))) {
       throw new InvalidCredentials("The username or password is incorrect.");
     }

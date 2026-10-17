@@ -78,10 +78,20 @@ const CurrentUser = endpoint(
   ({ session, user, username, email }) =>
     receive({ session })
       .then(Authenticating.authenticate({ session }).responds({ user }))
-      .then(where(
-        Authenticating._username({ user }).is({ username }),
-        Authenticating._email({ user }).is({ email }),
-      ).then(respond({ user, username, email }))),
+      .then(
+        where(
+          Authenticating._username({ user }).is({ username }),
+          Authenticating._email({ user }).is({ email }),
+        )
+          .then(respond({ user, username, email }))
+          .named("active-account"),
+        where(
+          Authenticating._username({ user }),
+          no(Authenticating._email({ user })),
+        )
+          .then(respond({ error: "ACCOUNT_NOT_ACTIVE" }))
+          .named("email-missing"),
+      ),
   { input: { required: ["session"] } },
 );
 
