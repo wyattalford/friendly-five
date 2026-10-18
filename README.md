@@ -49,9 +49,8 @@ is preserved as implementation history.
 - [Updated core user journey](design/core-user-journey.md)
 - [Automated concept and composition tests](tests/)
 - [Saved P3 verification output](docs/p3-test-output.txt)
-
-The visual design study and updated narrated P3 recording will be linked here
-when they are complete.
+- [Visual design study](design/FriendlyFive-Visual-Design-Study.pdf)
+- [Updated P3 demo recording](https://drive.google.com/file/d/1mGXkJDHUEMHToegp6cs7LKL0_ci6V_rs/view?usp=sharing)
 
 ## Architecture
 
