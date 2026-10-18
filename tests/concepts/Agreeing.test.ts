@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { MongoClient, type Db } from "mongodb";
 import {
   AcceptanceExpired,
@@ -66,7 +66,14 @@ describe("Agreeing", () => {
     database = client.db();
   });
 
-  beforeEach(resetDatabase);
+  beforeEach(async () => {
+    setSystemTime(new Date("2026-10-18T12:00:00.000Z"));
+    await resetDatabase();
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
 
   afterAll(async () => {
     await resetDatabase();
@@ -189,10 +196,7 @@ describe("Agreeing", () => {
       }),
     ).rejects.toThrow(RevisionNotParticipant);
 
-    await database.collection("agreeing.versions").updateOne(
-      { _id: created.version },
-      { $set: { deadline: new Date(Date.now() - 1_000) } },
-    );
+    setSystemTime(new Date(Date.now() + 61_000));
     await expect(
       agreeing.accept({ user: "alex", agreement: created.agreement, version: created.version }),
     ).rejects.toThrow(AcceptanceExpired);

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
 import { MongoClient, type Db } from "mongodb";
 import { createFriendlyFive } from "../../src/application.ts";
@@ -38,7 +38,14 @@ describe("agreement resolution boundary", () => {
     database = client.db();
   });
 
-  beforeEach(resetDatabase);
+  beforeEach(async () => {
+    setSystemTime(new Date("2026-10-18T12:00:00.000Z"));
+    await resetDatabase();
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
 
   afterAll(async () => {
     await resetDatabase();
@@ -118,10 +125,6 @@ describe("agreement resolution boundary", () => {
       item: proposal.agreement,
     });
     if (caseRecord === null) throw new Error("Expected acceptance to open a resolution case.");
-    await database.collection("resolving.cases").updateOne(
-      { _id: caseRecord._id },
-      { $set: { cutoff: new Date(Date.now() - 1_000) } },
-    );
 
     const outsiderLookup = await handler(
       post("/resolutions/by-agreement", { agreement: proposal.agreement }, outsiderCookie),
@@ -165,6 +168,8 @@ describe("agreement resolution boundary", () => {
     );
     expect(earlyResolverDecision.status).toBe(400);
     expect(await earlyResolverDecision.json()).toEqual({ error: "INVALID_REQUEST" });
+
+    setSystemTime(new Date(Date.now() + 61_000));
 
     const reported = await handler(
       post(
@@ -452,10 +457,7 @@ describe("agreement resolution boundary", () => {
 
       const caseRecord = await database.collection("resolving.cases").findOne({ item: proposal.agreement });
       if (caseRecord === null) throw new Error("Expected acceptance to open a resolution case.");
-      await database.collection("resolving.cases").updateOne(
-        { _id: caseRecord._id },
-        { $set: { cutoff: new Date(Date.now() - 1_000) } },
-      );
+      setSystemTime(new Date(Date.now() + 61_000));
       const reportResponse = await handler(
         post("/resolutions/report", { case: caseRecord._id, outcome }, wyattCookie),
       );
@@ -537,10 +539,7 @@ describe("agreement resolution boundary", () => {
       ))).status).toBe(200);
       const resolutionCase = await database.collection("resolving.cases").findOne({ item: proposal.agreement });
       if (resolutionCase === null) throw new Error("Expected acceptance to open a resolution case.");
-      await database.collection("resolving.cases").updateOne(
-        { _id: resolutionCase._id },
-        { $set: { cutoff: new Date(Date.now() - 1_000) } },
-      );
+      setSystemTime(new Date(Date.now() + 61_000));
       return { proposal, resolutionCase };
     }
 
@@ -561,6 +560,7 @@ describe("agreement resolution boundary", () => {
       },
       alexCookie,
     ))).status).toBe(200);
+    setSystemTime(new Date(Date.now() + 1));
     const replacementResponse = await handler(post(
       "/resolutions/report",
       { case: replacementScenario.resolutionCase._id, outcome: "FALSE", evidence: "Official result" },

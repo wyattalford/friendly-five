@@ -261,6 +261,6 @@ FriendlyFive is publicly deployed at
 [friendly-five.mit-sdg.dev](https://friendly-five.mit-sdg.dev/). Agreement-version
 and outcome-report histories are implemented. Email verification and automatic
 invitation delivery remain outside the current beta scope, so invitation links
-must be shared privately. A user profile page with basic user performance stats. Additional usability testing, broader dashboard
-filtering, and policies for long-running completion disputes can be evaluated
-without expanding the core journey.
+must be shared privately. Possible future additions include a user profile page
+with basic performance statistics. Additional usability testing, broader dashboard
+filtering, and policies for long-running completion disputes can be evaluated later.
