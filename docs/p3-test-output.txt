@@ -1,0 +1,83 @@
+FriendlyFive P3 verification output
+Run on 2026-10-18 with Bun 1.4.2 and the isolated MongoDB test databases.
+
+$ bun test
+bun test v1.4.2 (744846f84)
+
+tests/compositions/Resolution.test.ts:
+(pass) agreement resolution boundary > carries an authorized dispute through resolution and obligation completion
+(pass) agreement resolution boundary > records the correct obligation for mutually confirmed true and false outcomes, but none for void
+(pass) agreement resolution boundary > supports replacement reports without a resolver and an agreed participant resolver
+
+tests/compositions/Authentication.test.ts:
+(pass) browser authentication boundary > issues, uses, and clears an HttpOnly session cookie
+(pass) browser authentication boundary > rejects an existing session for an account without its required email
+
+tests/compositions/Linking.test.ts:
+(pass) agreement invitation boundary > lets a person invited by email choose a username before reviewing
+(pass) agreement invitation boundary > creates, authorizes, and revokes an invitation
+(pass) agreement invitation boundary > lets both participants revise resolver-free terms and retrieve the pending link
+(pass) agreement invitation boundary > lets the reviewer reject and the current author withdraw pending proposals
+(pass) agreement invitation boundary > returns not found instead of timing out for a stale invitation target
+
+tests/concepts/ObligationTracking.test.ts:
+(pass) ObligationTracking > records, reports, and confirms an obligation
+(pass) ObligationTracking > requires the owing person to report and evidence to dispute
+(pass) ObligationTracking > validates each obligation and permits only one per source item
+(pass) ObligationTracking > restricts completion review to the recipient and the current report
+
+tests/concepts/Linking.test.ts:
+(pass) Linking > creates unique opaque links and resolves their items
+(pass) Linking > only the owner can revoke and a revoked token no longer resolves
+
+tests/concepts/Agreeing.test.ts:
+(pass) Agreeing > proposes a version and accepts the same current version
+(pass) Agreeing > revising creates a new version and rejects stale acceptance
+(pass) Agreeing > revises resolver-free terms without creating a null resolver
+(pass) Agreeing > refuses proposals with the same participant twice
+(pass) Agreeing > validates required terms and the future deadline
+(pass) Agreeing > restricts acceptance and revision to the current eligible participant and deadline
+(pass) Agreeing > allows only the reviewer to reject the current pending version
+(pass) Agreeing > allows only the current version author to withdraw a pending proposal
+(pass) Agreeing > limits agreement views to participants and the resolver after acceptance
+(pass) Agreeing > returns visible agreements in deterministic agreement-identity order
+
+tests/concepts/Resolving.test.ts:
+(pass) Resolving > allows an ordinary report without evidence and mutual confirmation
+(pass) Resolving > stores valid private image evidence and rejects malformed images
+(pass) Resolving > requires a resolver decision to include evidence after a dispute
+(pass) Resolving > does not allow reporting before the cutoff
+(pass) Resolving > lets participants replace a disputed report when no resolver is designated
+(pass) Resolving > allows an agreed participant resolver to decide a disputed case
+(pass) Resolving > rejects reports and disputes from ineligible users or blank supplied evidence
+
+tests/concepts/Authenticating.test.ts:
+(pass) Authenticating > registers, signs in, authenticates, and signs out
+(pass) Authenticating > expires sessions after thirty minutes
+(pass) Authenticating > does not sign in an account without its required email
+(pass) Authenticating > reserves an email and lets the invitee choose a username exactly once
+(pass) Authenticating > releases an unclaimed reservation
+(pass) Authenticating > refuses blank credentials, duplicate usernames, and incorrect credentials
+
+39 pass
+0 fail
+408 expect() calls
+Ran 39 tests across 8 files. [8.39s]
+
+$ bun run check
+$ sync-engine check && sync-engine artifacts check && tsc --noEmit
+Concept action/query source check passed for 5 concepts.
+Application diagnostic check passed with 37 advisories (use --show-advisories to list them).
+
+$ bun run check:design
+$ sync-engine check-design design/concepts/*.md design/types.md design/compositions/*.md
+Design form check passed for 7 files.
+
+$ bun run build:frontend
+$ bunx --bun vite build
+vite v8.3.4 building client environment for production...
+216 modules transformed.
+dist/index.html                   0.59 kB | gzip:  0.35 kB
+dist/assets/index-BJwrUDzV.css   17.15 kB | gzip:  4.22 kB
+dist/assets/index-QUjmHfKW.js   159.72 kB | gzip: 52.41 kB
+Built successfully in 181ms.

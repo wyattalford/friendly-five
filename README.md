@@ -1,16 +1,16 @@
 # FriendlyFive
 
-FriendlyFive is a local web application for two friends to record clear wager
-terms, resolve the outcome, and track the resulting obligation. It was built for
-the MIT 6.1040 Fall 2026 P2 Alpha milestone using Bun, TypeScript, MongoDB, Vue,
-and MIT's sync-engine.
+FriendlyFive is a publicly deployed web application for two friends to record
+clear wager terms, resolve the outcome, and track the resulting obligation. It
+was built for the MIT 6.1040 Fall 2026 P3 Beta milestone using Bun, TypeScript,
+MongoDB, Vue, and MIT's sync-engine.
 
 FriendlyFive records obligations but does not process payments or enforce a
 real-world stake. A designated resolver is optional. When the participants
 disagree about an outcome, an agreed resolver can make the final decision from
 the terms both participants accepted.
 
-## Implemented MVP
+## Implemented functionality
 
 - Registration with a unique email and username, sign-in, session restoration,
   and sign-out
@@ -39,9 +39,19 @@ the terms both participants accepted.
 
 The maintained [core user journey](design/core-user-journey.md) demonstrates the
 complete path from an empty database through an email invitation, registration,
-agreement, outcome confirmation, and confirmed obligation completion.
-A narrated walkthrough of this journey is available in the
-[P2 demo recording](https://drive.google.com/file/d/1LJoGqUKwzpq3sLEaH6UJ4NyfNUX2rSIS/view?usp=sharing).
+agreement, outcome confirmation, and confirmed obligation completion. The
+[earlier P2 demo recording](https://drive.google.com/file/d/1LJoGqUKwzpq3sLEaH6UJ4NyfNUX2rSIS/view?usp=sharing)
+is preserved as implementation history.
+
+## P3 submission materials
+
+- [Deployed application](https://friendly-five.mit-sdg.dev/)
+- [Updated core user journey](design/core-user-journey.md)
+- [Automated concept and composition tests](tests/)
+- [Saved P3 verification output](docs/p3-test-output.txt)
+
+The visual design study and updated narrated P3 recording will be linked here
+when they are complete.
 
 ## Architecture
 
@@ -183,6 +193,19 @@ sync-engine's advisory diagnostics in full, run:
 bunx sync-engine check --show-advisories
 ```
 
+The successful P3 execution results are preserved in
+[`docs/p3-test-output.txt`](docs/p3-test-output.txt).
+
+On October 18, 2026, the deployed app was also tested through the complete core
+journey with fresh synthetic accounts. The walkthrough covered required-field
+validation, email invitation and invited-account activation, agreement review
+and acceptance, automatic reporting availability at the server cutoff, outcome
+reporting and confirmation, obligation reporting and receipt confirmation, the
+final `COMPLETE` dashboard status, and session restoration after a reload. The
+completed production record is agreement
+`9dbef612-a0e1-45c3-81cf-96b4e186d050`. Automated composition tests separately
+cover outsider access restrictions and the dispute paths.
+
 ## Authentication and access control
 
 Passwords are stored as Argon2id verifiers. Successful sign-in creates a
@@ -213,8 +236,8 @@ limited to the owing person and recipient.
 
 ## Design sources
 
-The files under `design/` are the maintained behavioral contract for the P2
-implementation:
+The files under `design/` are the maintained behavioral contract for the
+current implementation:
 
 - [Core user journey](design/core-user-journey.md)
 - [Shared types](design/types.md)
@@ -231,14 +254,14 @@ as design history:
 - [Original user journey](Design-Documents/user-journey.md)
 
 When an earlier artifact and a maintained specification differ, the files under
-`design/` describe the current MVP behavior.
+`design/` describe the current beta behavior.
 
-## P3 work
+## Deployment and future work
 
 FriendlyFive is publicly deployed at
 [friendly-five.mit-sdg.dev](https://friendly-five.mit-sdg.dev/). Agreement-version
-and outcome-report histories are implemented. Remaining P3 work includes
-production verification after each deployment, additional usability testing,
-email verification and delivery, and further visual polish. Broader dashboard filtering and policies for
-long-running completion disputes can be evaluated without expanding the core
-journey.
+and outcome-report histories are implemented. Email verification and automatic
+invitation delivery remain outside the current beta scope, so invitation links
+must be shared privately. A user profile page with basic user performance stats. Additional usability testing, broader dashboard
+filtering, and policies for long-running completion disputes can be evaluated
+without expanding the core journey.
