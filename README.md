@@ -10,6 +10,7 @@ stakes without processing payments or enforcing real-world obligations.
 ## Project materials
 
 - [Final design document](design/FriendlyFive-Final-Design.md)
+- [Final demo video](https://drive.google.com/file/d/1U_kXFZup3HIj6tVQDC5XS1aaPw47Iyaq/view?usp=sharing)
 - [Core user journey](design/core-user-journey.md) — invitation, agreement,
   third-party resolution, and fulfillment
 - [Current concept specifications](design/concepts/) and [shared types](design/types.md)
