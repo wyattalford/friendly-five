@@ -142,12 +142,17 @@ invitation flow was also checked in the browser with two unregistered invitees,
 separate links, resolver registration before acceptance, the waiting screen,
 first-version acceptance, and subsequent resolver access.
 
-Deployed checks on October 21 passed for existing-account agreement creation,
-confirmation, third-party resolution, resolver-free VOID, private photo evidence,
-concurrent resolver decisions, fulfillment disputes and retries, malformed inputs,
-outsider restrictions, cookie protections, sign-out, and new-session persistence.
-The browser walkthrough also verified reporting, dispute validation, resolver
-decisions, and persistence after reload.
+Final deployed checks on October 21 passed for all four existing/new counterpart
+and resolver combinations, registration before and after acceptance, obsolete
+invitations, stale acceptance, confirmation, third-party resolution, resolver-free
+VOID, private photo evidence, concurrent resolver decisions, fulfillment disputes
+and retries, malformed inputs, outsider restrictions, cookie protections,
+sign-out, and new-session persistence. An account and completed obligation from
+the preceding deployment also survived redeployment. The browser walkthrough
+verified separate registration links, the resolver waiting screen, first-version
+acceptance, automatic reporting availability at cutoff, dispute validation,
+resolver decisions, fulfillment reporting, receipt confirmation, and completed
+state after reload. No browser console errors were recorded during that journey.
 
 ## Architecture and access control
 
