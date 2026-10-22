@@ -38,6 +38,31 @@ describe("Authenticating", () => {
     await client.close();
   });
 
+  test("upgrades the original username index without losing accounts or sessions", async () => {
+    const users = database.collection("authenticating.users");
+    await users.createIndex({ username: 1 }, { unique: true });
+    await users.createIndex({ email: 1 }, { name: "unrelated_email_lookup" });
+    const known = { user: "legacy-user" };
+    await users.insertOne({ _id: known.user, username: "wyatt", email: "wyatt@example.com", passwordVerifier: await Bun.password.hash("safe password", { algorithm: "argon2id" }) });
+    await users.insertOne({ _id: "legacy-invite", email: "pending@example.com" });
+    const session = { session: "legacy-session" };
+    await database.collection("authenticating.sessions").insertOne({ _id: session.session, user: known.user, expiresAt: new Date(Date.now() + 60_000) });
+    const authenticating = new AuthenticatingConcept(database);
+    const first = await authenticating.invite({ identifier: "alex@example.com" });
+    const second = await authenticating.invite({ identifier: "morgan@example.com" });
+    expect(first.user).not.toBe(second.user);
+    expect(await authenticating.authenticate(session)).toEqual(known);
+    expect(await authenticating._byUsername({ username: "wyatt" })).toEqual([known]);
+    await expect(authenticating.signIn({ username: "wyatt", password: "safe password" })).resolves.toHaveProperty("session");
+    await expect(authenticating.activate({ user: "legacy-invite", username: "pending", password: "safe password" })).resolves.toEqual({});
+    await expect(authenticating.register({ username: "wyatt", email: "other@example.com", password: "safe password" })).rejects.toThrow(UsernameTaken);
+    const indexes = await users.listIndexes().toArray();
+    expect(indexes.some(index => index.name === "username_1")).toBe(false);
+    expect(indexes.some(index => index.name === "authenticating_unique_username" && index.unique && index.partialFilterExpression)).toBe(true);
+    expect(indexes.some(index => index.name === "unrelated_email_lookup")).toBe(true);
+    expect(await users.countDocuments()).toBe(4);
+  });
+
   test("invitation identity preparation reuses active users and reserves new emails", async () => {
     const authenticating = new AuthenticatingConcept(database);
     const known = await authenticating.register({ username: "morgan", email: "morgan@example.com", password: "synthetic password" });

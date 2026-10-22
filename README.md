@@ -9,6 +9,7 @@ stakes without processing payments or enforcing real-world obligations.
 
 ## Project materials
 
+- [Final design document](design/FriendlyFive-Final-Design.md)
 - [Core user journey](design/core-user-journey.md) — invitation, agreement,
   third-party resolution, and fulfillment
 - [Current concept specifications](design/concepts/) and [shared types](design/types.md)
@@ -116,11 +117,11 @@ bun scripts/smoke-test.ts http://127.0.0.1:3000
 ### Validation results
 
 Local checks on October 21, 2026 used Bun 1.4.2, MongoDB 8, and sync-engine
-1.1.0 against base commit `75524a0` plus the current changes.
+1.1.0.
 
 | Check | Result |
 | --- | --- |
-| Concept and HTTP suite | 55 tests passed across ten files |
+| Concept and HTTP suite | 56 tests passed across ten files |
 | Source, contracts, TypeScript, and specifications | Passed; 38 framework advisories |
 | Production build | Passed, with upstream browser-externalization warnings |
 | Clean source setup | Installation, generation, checks, tests, startup, health, and nested routes passed using the existing MongoDB container |
@@ -141,12 +142,12 @@ invitation flow was also checked in the browser with two unregistered invitees,
 separate links, resolver registration before acceptance, the waiting screen,
 first-version acceptance, and subsequent resolver access.
 
-The public host passed an earlier synthetic HTTP journey through fulfillment,
-a recorded dispute, resolver-free VOID, outsider read restrictions, and a new
-session. On October 21 its frontend still matched the earlier build, with
-deployment identifier `abd0351e-8ba7-465f-8e73-3a01c117e20a`; its Git revision
-was unavailable. **The current changes still require deployed validation of the
-resolver journey, persistence, access control, and error handling.**
+Deployed checks on October 21 passed for existing-account agreement creation,
+confirmation, third-party resolution, resolver-free VOID, private photo evidence,
+concurrent resolver decisions, fulfillment disputes and retries, malformed inputs,
+outsider restrictions, cookie protections, sign-out, and new-session persistence.
+The browser walkthrough also verified reporting, dispute validation, resolver
+decisions, and persistence after reload.
 
 ## Architecture and access control
 

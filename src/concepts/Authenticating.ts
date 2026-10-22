@@ -47,6 +47,19 @@ async function ensureUserIndexes(users: Collection<UserDocument>): Promise<void>
       partialFilterExpression: { email: { $type: "string" } },
     },
   );
+  // Older deployments indexed missing usernames as a single unique null value.
+  // Install the replacement first so registered usernames stay protected.
+  const indexes = await users.listIndexes().toArray();
+  const legacy = indexes.find(index => index.name === "username_1");
+  if (legacy?.unique && !legacy.partialFilterExpression && !legacy.sparse &&
+      legacy.key?.username === 1 && Object.keys(legacy.key).length === 1) {
+    try {
+      await users.dropIndex("username_1");
+    } catch (error) {
+      // Another application instance may have completed the same upgrade.
+      if (!(error instanceof MongoServerError && error.code === 27)) throw error;
+    }
+  }
 }
 
 const userIndexPromises = new WeakMap<Collection<UserDocument>, Promise<void>>();
