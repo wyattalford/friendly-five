@@ -2,7 +2,10 @@
 
 FriendlyFive records two friends' accepted wager terms, the final outcome, and
 the resulting fulfillment without processing the stake itself. The core journey
-starts with Alex registered and Wyatt joining through an email invitation.
+starts with Wyatt registered and Alex and Morgan joining through separate
+email invitations to the initial proposal. Alex accepts the terms naming Morgan
+as resolver, and Morgan decides a disputed outcome before the participants
+complete the resulting obligation.
 
 Authenticated requests must use the user returned for that request's session.
 The application authorizes each domain action from roles owned by the relevant
@@ -23,20 +26,34 @@ resolution status and, when one exists, its current obligation status so the
 interface can show progress beyond agreement acceptance. Pending entries also
 identify the current version's author so the interface can name the other
 participant whose acceptance is required. The proposal flow
-resolves an existing counterpart by username or email and resolves the resolver
-username before invoking
-[Agreeing.propose](reaction:FriendlyFive.Agreements.Propose), then creates an
-active Linking reference owned by the initiator and returns its opaque token.
-A counterpart email without an active account is reserved by Authenticating
-and used as the proposal's counterpart identity. The holder of that proposal's
-unguessable link chooses a username and activates that exact identity before the
-private terms become visible. Ordinary registration cannot claim a reserved email.
+accepts an existing username or email for each role, or an unused email for a
+new person. Before reserving identities, it checks the terms and both identifiers.
+[Proposal creation](reaction:FriendlyFive.Agreements.Propose) prepares the account
+identities through Authenticating.invite and stores both roles in the first term
+version. It creates the counterpart's opaque invitation and, when a resolver is
+named, a separate link explicitly addressed to that resolver. Returned resolver
+links are available for both existing and new accounts. If the same newly
+invited person is both counterpart and resolver, only one identity is reserved.
+
+A link holder chooses a username and password for exactly the identity targeted
+by their invitation. A resolver can register before or after acceptance, but
+registration does not grant agreement acceptance authority. Ordinary registration
+cannot claim a reserved email, and an unrelated proposal cannot create another
+activation link for an already reserved identity. Share the original link while
+that invitation remains pending. Email ownership is not verified.
+
 The public [invitation setup](reaction:FriendlyFive.Agreements.InvitationSetup)
-returns only the inviter username, counterpart email, any active counterpart
-username, and whether account
-creation is needed, allowing the browser to present the correct authentication
-prompt without exposing proposal terms.
-A supplied nonblank resolver username must identify an account. Participants
+returns the inviter, intended recipient's email/username and opaque identity,
+role, agreement status, and whether registration is needed. It exposes no terms,
+reports, evidence, or details of the other recipient. A resolver registering
+before acceptance sees a waiting screen. Accepted-agreement permissions remain
+unchanged, including the restriction on private fulfillment information.
+
+Either participant may add or change the resolver while revising pending terms,
+using an existing username/email or a new email. Existing unregistered invitees
+of that agreement retain their identity across revisions. Each revision still
+requires the other participant's exact-version acceptance.
+Participants
 may submit replacement terms through
 [agreement revision](reaction:FriendlyFive.Agreements.Revise); the new version
 then requires acceptance by the other participant. While an agreement remains
@@ -115,11 +132,17 @@ FriendlyFive.Obligations.DisputeReceipt at /obligations/dispute
 ```
 
 ```computations
+SameEmail(left: String, right: String) : Boolean
+  Reports whether two email identifiers match after trimming and lowercasing.
+
+DifferentEmail(left: String, right: String) : Boolean
+  Reports whether two email identifiers differ after trimming and lowercasing.
+
 Blank(value: String) : Boolean
-  Reports whether an optional username contains no non-whitespace characters.
+  Reports whether an optional resolver identifier contains no non-whitespace characters.
 
 NonBlank(value: String) : Boolean
-  Reports whether an optional username contains at least one non-whitespace character.
+  Reports whether an optional resolver identifier contains at least one non-whitespace character.
 
 Different(left: String, right: String) : Boolean
   Reports whether two strings differ.
@@ -152,3 +175,36 @@ The cross-concept link is [accepted agreements open resolution cases](reaction:F
 Final TRUE decisions are linked to [TRUE-side obligation recording](reaction:FriendlyFive.Outcomes.FinalTrueDecisionRecordsObligation), and final FALSE decisions are linked to [FALSE-side obligation recording](reaction:FriendlyFive.Outcomes.FinalFalseDecisionRecordsObligation). Mutual confirmations use [TRUE confirmation obligation recording](reaction:FriendlyFive.Outcomes.ConfirmedTrueOutcomeRecordsObligation) and [FALSE confirmation obligation recording](reaction:FriendlyFive.Outcomes.ConfirmedFalseOutcomeRecordsObligation).
 
 Obligation fulfillment uses [obligation review](reaction:FriendlyFive.Obligations.GetObligation), [agreement-based obligation lookup](reaction:FriendlyFive.Obligations.GetObligationForAgreement), [current completion review](reaction:FriendlyFive.Obligations.GetCurrentCompletion), [private completion image-evidence lookup](reaction:FriendlyFive.Obligations.GetObligationImages), [completion reporting](reaction:FriendlyFive.Obligations.ReportCompletion), [receipt confirmation](reaction:FriendlyFive.Obligations.ConfirmReceipt), and [receipt disputes](reaction:FriendlyFive.Obligations.DisputeReceipt). Completion reports and receipt disputes may include one optional image under the same private-access, format, and size rules as outcome evidence.
+
+Without a resolver, a disputed outcome remains unresolved until a replacement
+report receives confirmation from the other participant. A replacement may be
+TRUE, FALSE, or VOID. Repeated or competing actions must not produce multiple
+successful transitions for the same observed version or report. See the
+[README](../../README.md#authentication-and-access-control) for the reviewed access policy.
+
+Every endpoint supplies a synchronous input validator. Current inputs must be
+strings, with null permitted only for optional evidence fields and resolver
+username. Outcomes must be TRUE, FALSE, or VOID, and deadlines must parse as
+finite dates. Invalid shapes return INVALID_INPUT before domain actions, mapped
+to HTTP INVALID_REQUEST. Generated TypeScript alone does not validate JSON.
+
+The [invitation recipient view](view:FriendlyFive.Agreements.InvitationRecipient)
+binds a registration link to its current counterpart or resolver role. The
+[resolver-link endpoint](reaction:FriendlyFive.Agreements.GetResolverLink)
+returns the designated resolver's private invitation reference to an authorized
+agreement viewer.
+
+```endpoints
+FriendlyFive.Agreements.GetResolverLink at /agreements/resolver-link
+```
+
+Pending resolver reservations are released when proposals are
+[withdrawn](reaction:FriendlyFive.Agreements.WithdrawnInvitationReleasesReservedResolver),
+[rejected](reaction:FriendlyFive.Agreements.RejectedInvitationReleasesReservedResolver),
+or [revised to replace the resolver](reaction:FriendlyFive.Agreements.RevisionReleasesReplacedReservedResolver).
+A resolver who is also the counterpart retains the counterpart identity.
+
+The [reserved invitee view](view:FriendlyFive.Agreements.ReservedAgreementInvitee)
+allows a revision to retain an unregistered resolver or designate its already
+invited counterpart. It does not let a different agreement claim an existing
+reserved identity.

@@ -154,10 +154,14 @@ export class ObligationTrackingConcept {
                   }),
             reportedAt: new Date(),
         });
-        await this.obligations.updateOne(
-            { _id: obligationId, status: { $in: ['DUE', 'DISPUTED'] } },
+        const changed = await this.obligations.updateOne(
+            { _id: obligationId, status: record.status, currentReport: record.currentReport ?? { $exists: false } },
             { $set: { currentReport: report, status: 'REPORTED' } },
         );
+        if (changed.modifiedCount !== 1) {
+            await this.reports.deleteOne({ _id: report });
+            throw new CompletionNotOpen("This obligation is not open for a completion report.");
+        }
         return { report };
     }
 
@@ -183,10 +187,11 @@ export class ObligationTrackingConcept {
             throw new ReceiptNotRecipient(
                 'Only the recipient can confirm receipt.',
             );
-        await this.obligations.updateOne(
+        const changed = await this.obligations.updateOne(
             { _id: obligationId, status: 'REPORTED', currentReport: report },
             { $set: { status: 'COMPLETE', confirmedAt: new Date() } },
         );
+        if (changed.modifiedCount !== 1) throw new ReceiptNotCurrent("Only the current completion report can be confirmed.");
         return {};
     }
 
@@ -223,6 +228,11 @@ export class ObligationTrackingConcept {
                 'A completion dispute needs an explanation or supporting evidence.',
             );
         const image = normalizedEvidenceImage(evidenceImage, evidenceImageName);
+        const changed = await this.obligations.updateOne(
+            { _id: obligationId, status: 'REPORTED', currentReport: report },
+            { $set: { status: 'DISPUTED' } },
+        );
+        if (changed.modifiedCount !== 1) throw new ReceiptDisputeNotCurrent("Only the current completion report can be disputed.");
         await this.reports.updateOne(
             { _id: report },
             {
@@ -236,10 +246,6 @@ export class ObligationTrackingConcept {
                           }),
                 },
             },
-        );
-        await this.obligations.updateOne(
-            { _id: obligationId, status: 'REPORTED', currentReport: report },
-            { $set: { status: 'DISPUTED' } },
         );
         return {};
     }

@@ -15,7 +15,7 @@ which the token no longer resolves.
 
 ```types
 external User
-  The link owner.
+  A link owner or intended recipient.
 external Item
   The item identified by a link.
 LinkStatus is ACTIVE or REVOKED
@@ -28,6 +28,7 @@ LinkStatus is ACTIVE or REVOKED
 a set of Links with
   an owner User
   an item Item
+  an optional recipient User
   a unique token String
   a status LinkStatus
 
@@ -37,10 +38,10 @@ Rule: Tokens are unguessable, immutable, and never reused, including tokens belo
 ## Actions
 
 ```actions
-create(owner: User, item: Item) : returns (link: Link, token: String)
+create(owner: User, item: Item, recipient?: User) : returns (link: Link, token: String)
   where true
   then
-    add a new link with owner, item, a fresh unguessable token, and status ACTIVE
+    add a new link with owner, item, recipient if supplied, a fresh unguessable token, and status ACTIVE
     bind token to the new link's token
     returns link, token
 
@@ -73,5 +74,11 @@ revoke(user: User, link: Link) : returns ()
 
 ```queries
 _activeForItem(item: Item) : optional (link: Link, token: String)
-  returns one active link for item, ordered by link identity, or no row when item has no active link
+  returns one active link for item without a designated recipient, ordered by link identity, or no row when none exists
+
+_recipient(token: String, fallback: User) : optional (user: User)
+  returns the active link's designated recipient or the supplied fallback when none was designated, or no row for an inactive or unknown token
+
+_forRecipient(item: Item, recipient: User) : optional (link: Link, token: String)
+  returns one active link with the exact item and designated recipient, ordered by link identity, or no row when none exists
 ```

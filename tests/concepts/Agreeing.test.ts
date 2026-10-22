@@ -80,6 +80,36 @@ describe("Agreeing", () => {
     await client.close();
   });
 
+  test("concurrent acceptance succeeds once and preserves the accepted version", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const created = await agreeing.propose(proposal());
+    const results = await Promise.allSettled(Array.from({ length: 8 }, () =>
+      agreeing.accept({ user: "alex", agreement: created.agreement, version: created.version }),
+    ));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    await expect(agreeing._get({ agreement: created.agreement })).resolves.toMatchObject([
+      { status: "ACCEPTED", currentVersion: created.version },
+    ]);
+  });
+
+  test("a revision racing acceptance cannot change accepted terms", async () => {
+    const agreeing = new AgreeingConcept(database);
+    const created = await agreeing.propose(proposal());
+    const results = await Promise.allSettled([
+      agreeing.accept({ user: "alex", agreement: created.agreement, version: created.version }),
+      agreeing.revise({ user: "wyatt", agreement: created.agreement,
+        expectedVersion: created.version, ...proposal({ claim: "Changed terms" }) }),
+    ]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const [record] = await agreeing._get({ agreement: created.agreement });
+    if (record?.status === "ACCEPTED") {
+      expect(record.currentVersion).toBe(created.version);
+      await expect(agreeing._versions({ agreement: created.agreement })).resolves.toHaveLength(1);
+    } else {
+      expect(record?.status).toBe("PENDING");
+    }
+  });
+
   test("proposes a version and accepts the same current version", async () => {
     const agreeing = new AgreeingConcept(database);
     const created = await agreeing.propose(proposal());

@@ -44,6 +44,42 @@ describe("Resolving", () => {
     await client.close();
   });
 
+  test("concurrent reports and resolver decisions each have one winner", async () => {
+    const resolving = new ResolvingConcept(database);
+    const opened = await resolving.open({ item: "race", first: "wyatt", second: "alex",
+      resolver: "morgan", cutoff: new Date(Date.now() - 1000), resolutionRule: "Official score" });
+    const submissions = await Promise.allSettled(Array.from({ length: 8 }, () =>
+      resolving.submit({ user: "wyatt", case: opened.case, outcome: "TRUE" }),
+    ));
+    expect(submissions.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const [current] = await resolving._current({ case: opened.case });
+    if (!current) throw new Error("Expected current report");
+    await resolving.dispute({ user: "alex", case: opened.case, report: current.report, reason: "Wrong score" });
+    const decisions = await Promise.allSettled(Array.from({ length: 8 }, (_, index) =>
+      resolving.decide({ user: "morgan", case: opened.case,
+        outcome: index % 2 === 0 ? "TRUE" : "FALSE", evidence: "Official score" }),
+    ));
+    expect(decisions.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    await expect(resolving._reports({ case: opened.case })).resolves.toHaveLength(2);
+    await expect(resolving._get({ case: opened.case })).resolves.toMatchObject([{ status: "FINAL" }]);
+  });
+
+  test("a confirmation racing a dispute cannot annotate a final report", async () => {
+    const resolving = new ResolvingConcept(database);
+    const opened = await resolving.open({ item: "review-race", first: "wyatt", second: "alex",
+      cutoff: new Date(Date.now() - 1000), resolutionRule: "Official score" });
+    const report = await resolving.submit({ user: "wyatt", case: opened.case, outcome: "TRUE" });
+    const results = await Promise.allSettled([
+      resolving.confirm({ user: "alex", case: opened.case, report: report.report }),
+      resolving.dispute({ user: "alex", case: opened.case, report: report.report, reason: "Wrong score" }),
+    ]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const [record] = await resolving._get({ case: opened.case });
+    const [current] = await resolving._current({ case: opened.case });
+    if (record?.status === "FINAL") expect(current).not.toHaveProperty("disputeReason");
+    else expect(current?.disputeReason).toBe("Wrong score");
+  });
+
   test("allows an ordinary report without evidence and mutual confirmation", async () => {
     const resolving = new ResolvingConcept(database);
     const opened = await resolving.open({

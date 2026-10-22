@@ -267,17 +267,27 @@ export class AgreeingConcept {
 
         await ensureIndexes(this.agreements, this.versions);
         const version = crypto.randomUUID();
-        await this.versions.insertOne({
-            _id: version,
-            agreement,
-            number: current.number + 1,
-            author: user,
-            ...terms,
-        });
-        await this.agreements.updateOne(
-            { _id: agreement, currentVersion: expectedVersion },
+        try {
+            await this.versions.insertOne({
+                _id: version,
+                agreement,
+                number: current.number + 1,
+                author: user,
+                ...terms,
+            });
+        } catch (error) {
+            if (error instanceof MongoServerError && error.code === 11_000)
+                throw new RevisionStaleVersion('Those terms are no longer the current version.');
+            throw error;
+        }
+        const changed = await this.agreements.updateOne(
+            { _id: agreement, status: 'PENDING', currentVersion: expectedVersion },
             { $set: { currentVersion: version } },
         );
+        if (changed.modifiedCount !== 1) {
+            await this.versions.deleteOne({ _id: version });
+            throw new RevisionStaleVersion('The proposal changed. Review its current state before revising.');
+        }
         return { version };
     }
 
@@ -313,10 +323,12 @@ export class AgreeingConcept {
             );
         if (current.deadline.getTime() <= Date.now())
             throw new AcceptanceExpired('The agreement deadline has passed.');
-        await this.agreements.updateOne(
+        const changed = await this.agreements.updateOne(
             { _id: agreement, status: 'PENDING', currentVersion: version },
             { $set: { status: 'ACCEPTED', acceptedAt: new Date() } },
         );
+        if (changed.modifiedCount !== 1)
+            throw new AcceptanceNotPending('The proposal changed. Review its current state before trying again.');
         return {};
     }
 
@@ -347,10 +359,12 @@ export class AgreeingConcept {
             throw new RejectionNotAuthorized(
                 'Only the other participant can reject the current version.',
             );
-        await this.agreements.updateOne(
+        const changed = await this.agreements.updateOne(
             { _id: agreement, status: 'PENDING', currentVersion: version },
             { $set: { status: 'REJECTED' } },
         );
+        if (changed.modifiedCount !== 1)
+            throw new RejectionNotPending('The proposal changed. Review its current state before trying again.');
         return {};
     }
 
@@ -377,10 +391,12 @@ export class AgreeingConcept {
             throw new WithdrawalNotAuthorized(
                 "Only the current version's author can withdraw it.",
             );
-        await this.agreements.updateOne(
+        const changed = await this.agreements.updateOne(
             { _id: agreement, status: 'PENDING', currentVersion: version },
             { $set: { status: 'WITHDRAWN' } },
         );
+        if (changed.modifiedCount !== 1)
+            throw new WithdrawalNotPending('The proposal changed. Review its current state before trying again.');
         return {};
     }
 
@@ -438,6 +454,21 @@ export class AgreeingConcept {
             resolutionRule: version.resolutionRule,
             ...(version.resolver == null ? {} : { resolver: version.resolver }),
         }));
+    }
+
+    async _revisionOpen({ agreement, user, expectedVersion }: { agreement: string; user: string; expectedVersion: string }) {
+        const record = await this.agreements.findOne({ _id: agreement, status: 'PENDING', currentVersion: expectedVersion });
+        if (!record || (record.initiator !== user && record.counterpart !== user)) return [];
+        const version = await this.versions.findOne({ _id: expectedVersion });
+        return version && version.deadline.getTime() > Date.now() ? [{ agreement }] : [];
+    }
+
+    async _invitedRole({ agreement, user }: { agreement: string; user: string }) {
+        const record = await this.agreements.findOne({ _id: agreement });
+        if (!record || (record.status !== 'PENDING' && record.status !== 'ACCEPTED')) return [];
+        if (record.counterpart === user) return [{ role: 'COUNTERPART' as const }];
+        const version = await this.versions.findOne({ _id: record.currentVersion });
+        return version?.resolver === user ? [{ role: 'RESOLVER' as const }] : [];
     }
 
     async _designatedResolver({ agreement }: { agreement: string }) {

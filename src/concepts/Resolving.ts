@@ -108,7 +108,11 @@ export class ResolvingConcept {
     await ensureIndexes(this.cases, this.reports);
     const report = crypto.randomUUID();
     await this.reports.insertOne({ _id: report, case: caseId, author: user, outcome, ...(suppliedEvidence === undefined ? {} : { evidence: suppliedEvidence }), ...(image.image === undefined ? {} : { evidenceImage: image.image, evidenceImageName: image.imageName }), reportedAt: new Date() });
-    await this.cases.updateOne({ _id: caseId, status: { $in: ["OPEN", "DISPUTED"] } }, { $set: { currentReport: report, status: "PROPOSED" } });
+    const changed = await this.cases.updateOne({ _id: caseId, status: record.status, currentReport: record.currentReport ?? { $exists: false } }, { $set: { currentReport: report, status: "PROPOSED" } });
+    if (changed.modifiedCount !== 1) {
+      await this.reports.deleteOne({ _id: report });
+      throw new SubmissionCaseClosed("This case is not open for an outcome report.");
+    }
     return { report };
   }
 
@@ -117,7 +121,8 @@ export class ResolvingConcept {
     if (record === null || record.status !== "PROPOSED" || record.currentReport !== report) throw new ConfirmationNotCurrent("Only the current proposed report can be confirmed.");
     const current = await this.reports.findOne({ _id: report });
     if (current === null || (user !== record.first && user !== record.second) || user === current.author) throw new ConfirmationNotAuthorized("Only the other participant can confirm this report.");
-    await this.cases.updateOne({ _id: caseId, status: "PROPOSED", currentReport: report }, { $set: { status: "FINAL", resolvedAt: new Date() } });
+    const changed = await this.cases.updateOne({ _id: caseId, status: "PROPOSED", currentReport: report }, { $set: { status: "FINAL", resolvedAt: new Date() } });
+    if (changed.modifiedCount !== 1) throw new ConfirmationNotCurrent("Only the current proposed report can be confirmed.");
     return {};
   }
 
@@ -128,8 +133,9 @@ export class ResolvingConcept {
     if (current === null || (user !== record.first && user !== record.second) || user === current.author) throw new DisputeNotAuthorized("Only the other participant can dispute this report.");
     if (reason.trim() === "") throw new DisputeEvidenceRequired("A dispute needs an explanation or supporting evidence.");
     const image = normalizedEvidenceImage(evidenceImage, evidenceImageName);
+    const changed = await this.cases.updateOne({ _id: caseId, status: "PROPOSED", currentReport: report }, { $set: { status: "DISPUTED" } });
+    if (changed.modifiedCount !== 1) throw new DisputeNotCurrent("Only the current proposed report can be disputed.");
     await this.reports.updateOne({ _id: report }, { $set: { disputedBy: user, disputeReason: reason, ...(image.image === undefined ? {} : { disputeImage: image.image, disputeImageName: image.imageName }) } });
-    await this.cases.updateOne({ _id: caseId, status: "PROPOSED", currentReport: report }, { $set: { status: "DISPUTED" } });
     return {};
   }
 
@@ -144,7 +150,11 @@ export class ResolvingConcept {
     await ensureIndexes(this.cases, this.reports);
     const report = crypto.randomUUID();
     await this.reports.insertOne({ _id: report, case: caseId, author: user, outcome, evidence, ...(image.image === undefined ? {} : { evidenceImage: image.image, evidenceImageName: image.imageName }), reportedAt: new Date() });
-    await this.cases.updateOne({ _id: caseId, status: "DISPUTED" }, { $set: { currentReport: report, status: "FINAL", resolvedAt: new Date() } });
+    const changed = await this.cases.updateOne({ _id: caseId, status: "DISPUTED", currentReport: record.currentReport }, { $set: { currentReport: report, status: "FINAL", resolvedAt: new Date() } });
+    if (changed.modifiedCount !== 1) {
+      await this.reports.deleteOne({ _id: report });
+      throw new DecisionCaseClosed("This case is already final or does not exist.");
+    }
     return { report };
   }
 

@@ -47,6 +47,20 @@ describe("Linking", () => {
     });
   });
 
+  test("keeps counterpart references and recipient-specific links separate", async () => {
+    const linking = new LinkingConcept(database);
+    const counterpart = await linking.create({ owner: "wyatt", item: "agreement" });
+    const resolver = await linking.create({ owner: "wyatt", item: "agreement", recipient: "morgan" });
+    await expect(linking._activeForItem({ item: "agreement" })).resolves.toEqual([counterpart]);
+    await expect(linking._forRecipient({ item: "agreement", recipient: "morgan" })).resolves.toEqual([resolver]);
+    await expect(linking._forRecipient({ item: "agreement", recipient: "alex" })).resolves.toEqual([]);
+    await expect(linking._recipient({ token: counterpart.token, fallback: "alex" })).resolves.toEqual([{ user: "alex" }]);
+    await expect(linking._recipient({ token: resolver.token, fallback: "alex" })).resolves.toEqual([{ user: "morgan" }]);
+    await linking.revoke({ user: "wyatt", link: resolver.link });
+    await expect(linking._recipient({ token: resolver.token, fallback: "alex" })).resolves.toEqual([]);
+    await expect(linking._forRecipient({ item: "agreement", recipient: "morgan" })).resolves.toEqual([]);
+  });
+
   test("only the owner can revoke and a revoked token no longer resolves", async () => {
     const linking = new LinkingConcept(database);
     const created = await linking.create({ owner: "wyatt", item: "agreement-1" });

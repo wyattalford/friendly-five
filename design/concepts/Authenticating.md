@@ -15,6 +15,8 @@ after which it cannot authenticate another request.
 ## Types
 
 ```types
+EmailAvailability is AVAILABLE or UNAVAILABLE
+  Whether an email can be reserved for a new invited identity.
 ```
 
 ## State
@@ -58,6 +60,22 @@ reserve(email: String) : returns (user: User)
   then
     refuses RESERVATION_NOT_AVAILABLE "That email is already registered or invited."
   where email is valid and available
+  then
+    add a new user with normalized email, no username, and no passwordVerifier
+    returns user
+
+invite(identifier: String) : returns (user: User)
+  where identifier matches an active username or normalized email
+  then
+    bind user to the existing identity without changing state
+    returns user
+  where identifier names an already reserved email
+  then
+    refuses RESERVATION_NOT_AVAILABLE "That email is already registered or invited."
+  where identifier is neither an existing username nor a valid email
+  then
+    refuses INVALID_CREDENTIALS "Use an existing username or a valid email to invite someone."
+  where identifier is an available email
   then
     add a new user with normalized email, no username, and no passwordVerifier
     returns user
@@ -128,6 +146,12 @@ _byEmail(email: String) : optional (user: User)
 
 _byIdentifier(identifier: String) : optional (user: User)
   When identifier has email format, answers the active user whose normalized email matches it. Otherwise answers the active user whose username exactly matches it. Answers no row when there is no match.
+
+_reservedByEmail(email: String) : optional (user: User)
+  Answers the reserved user for the normalized email, or no row when unknown or active.
+
+_availableEmail(email: String) : optional (availability: EmailAvailability)
+  Answers AVAILABLE when email has valid format and its normalized value is unused, or no row otherwise.
 
 _reserved(user: User) : optional (user: User)
   Answers user when it exists without a passwordVerifier, or no row otherwise.

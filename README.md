@@ -1,266 +1,186 @@
 # FriendlyFive
 
-FriendlyFive is a publicly deployed web application for two friends to record
-clear wager terms, resolve the outcome, and track the resulting obligation. It
-was built for the MIT 6.1040 Fall 2026 P3 Beta milestone using Bun, TypeScript,
-MongoDB, Vue, and MIT's sync-engine.
+FriendlyFive helps two friends agree on wager terms, resolve an outcome, and
+confirm fulfillment of the resulting obligation. Built for MIT 6.1040 Software
+Design with Bun, TypeScript, MongoDB, Vue, and MIT's sync-engine, it records
+stakes without processing payments or enforcing real-world obligations.
 
-FriendlyFive records obligations but does not process payments or enforce a
-real-world stake. A designated resolver is optional. When the participants
-disagree about an outcome, an agreed resolver can make the final decision from
-the terms both participants accepted.
+**[Open FriendlyFive](https://friendly-five.mit-sdg.dev/)**
 
-## Implemented functionality
+## Project materials
 
-- Registration with a unique email and username, sign-in, session restoration,
-  and sign-out
-- Two-party agreement proposals addressed to an existing username or email,
-  with versioned counterproposals
-- Shareable proposals for counterparts who create their account from the invitation
-- Chronological agreement-version history on pending and accepted agreements
-- Optional designated resolvers agreed upon as part of the terms
-- Opaque invitation links that identify an agreement without granting access
-- Acceptance, rejection, withdrawal, and pending-proposal link retrieval
-- Outcome reporting after the agreed cutoff, with optional text and photo evidence
-- Chronological outcome-report history that preserves disputed and replaced reports
-- Outcome confirmation or a dispute with a required explanation
-- Final resolver decisions for disputed outcomes
-- Private JPEG, PNG, or WebP evidence photos for outcome reports, disputes,
-  resolver decisions, completion reports, and receipt disputes
-- Automatic creation of the correct participant obligation for `TRUE` and
-  `FALSE` outcomes, with no obligation for `VOID`
-- Completion reporting, receipt confirmation, and completion disputes
-- A dashboard that reports the effective agreement, resolution, or obligation
-  status and names the participant whose acceptance is pending
-- Responsive phone layouts for the complete agreement lifecycle
-- Keyboard navigation, route-focus management, announced loading states, and
-  retry actions for recoverable loading failures
-- Persistent MongoDB state and backend authorization for every private workflow
+- [Core user journey](design/core-user-journey.md) — invitation, agreement,
+  third-party resolution, and fulfillment
+- [Current concept specifications](design/concepts/) and [shared types](design/types.md)
+- [Reactions and API endpoints](design/compositions/FriendlyFive.md)
+- [Concept and integration tests](tests/) and [validation results](#validation-results)
 
-The maintained [core user journey](design/core-user-journey.md) demonstrates the
-complete path from an empty database through an email invitation, registration,
-agreement, outcome confirmation, and confirmed obligation completion. The
-[earlier P2 demo recording](https://drive.google.com/file/d/1LJoGqUKwzpq3sLEaH6UJ4NyfNUX2rSIS/view?usp=sharing)
-is preserved as implementation history.
+## Run locally
 
-## P3 submission materials
-
-- [Deployed application](https://friendly-five.mit-sdg.dev/)
-- [Updated core user journey](design/core-user-journey.md)
-- [Automated concept and composition tests](tests/)
-- [Saved P3 verification output](docs/p3-test-output.txt)
-- [Visual design study](design/FriendlyFive-Visual-Design-Study.pdf)
-- [Updated P3 demo recording](https://drive.google.com/file/d/1mGXkJDHUEMHToegp6cs7LKL0_ci6V_rs/view?usp=sharing)
-
-## Architecture
-
-Each concept owns its own state and rules. Concepts do not call one another or
-read one another's collections. The
-[FriendlyFive composition](design/compositions/FriendlyFive.md) coordinates
-them with sync-engine endpoints, views, formers, and reactions.
-
-| Concept | Independent responsibility |
-| --- | --- |
-| [Authenticating](design/concepts/Authenticating.md) | Accounts, password verification, and expiring sessions |
-| [Agreeing](design/concepts/Agreeing.md) | Two-party proposals, term versions, and acceptance state |
-| [Linking](design/concepts/Linking.md) | Opaque, revocable references to application items |
-| [Resolving](design/concepts/Resolving.md) | Outcome reports, disputes, confirmations, and final decisions |
-| [ObligationTracking](design/concepts/ObligationTracking.md) | Resulting obligations and confirmation of their completion |
-
-The Vue frontend calls the generated sync-engine HTTP wire through
-[`web/api.ts`](web/api.ts). Browser request and response types therefore come
-from the same endpoint definitions used by the backend instead of a separate
-handwritten API contract.
-
-Agreement acceptance opens one resolution case through a reaction. A final
-`TRUE` or `FALSE` result creates one obligation through another reaction using
-the accepted version's stakes. This coordination remains outside the concept
-implementations so the concepts stay independent.
-
-## Requirements
-
-- [Bun](https://bun.sh/) 1.4.2
-- [Podman](https://podman.io/) with Compose support
-- A current web browser
-
-On macOS, start the Podman virtual machine before running the application if it
-is not already running:
-
-```sh
-podman machine start
-```
-
-## Run locally from a fresh clone
-
-Clone the repository and enter it:
+Install [Bun](https://bun.sh/) 1.4.2 and [Podman](https://podman.io/) with Compose
+support. On macOS, start the Podman virtual machine with `podman machine start`.
+Then run:
 
 ```sh
 git clone https://github.com/wyattalford/friendly-five.git
 cd friendly-five
-```
-
-Install the pinned dependencies and create the local environment file:
-
-```sh
-bun install
+bun install --frozen-lockfile
 cp .env.example .env
-```
-
-Generate the typed sync-engine artifacts before the first build or type check:
-
-```sh
 bun run generate
-```
-
-Start MongoDB, the sync-engine backend, and the Vue development server:
-
-```sh
 bun run dev
 ```
 
-Open <http://127.0.0.1:5173>. The Vite server proxies `/api` to the backend at
-<http://127.0.0.1:3000>, keeping local browser requests on one origin.
+Open [127.0.0.1:5173](http://127.0.0.1:5173). The development command starts
+MongoDB, the backend on port 3000, and Vite on port 5173. Vite proxies `/api`
+to the backend. For separate service logs, run `bun run db:up`, then run
+`bun run dev:backend` and `bun run dev:frontend` in separate terminals.
 
-The default development configuration in `.env.example` uses the MongoDB
-container defined in `compose.yaml`. Change `MONGODB_URL` and `PUBLIC_ORIGIN`
-when using a different database or frontend origin. Do not commit `.env`.
+### Configuration
 
-### Start services separately
+The supplied `.env.example` matches the local MongoDB container in
+`compose.yaml`. Keep credentials in `.env`, which is excluded from Git.
 
-The individual commands are useful when separate logs are needed:
+| Variable | Purpose and default |
+| --- | --- |
+| `MONGODB_URL` | Required MongoDB URL, including database and authentication configuration |
+| `PUBLIC_ORIGIN` | Exact browser origin; defaults to `http://127.0.0.1:5173` |
+| `HOST` | Backend listener address; defaults to `127.0.0.1` |
+| `PORT` | Backend port; defaults to `3000` |
+| `NODE_ENV` | Set to `production` for production-mode operation |
 
-```sh
-bun run db:up
-bun run dev:backend
-bun run dev:frontend
-```
-
-Run the backend and frontend commands in separate terminals. Useful database
-commands are:
-
-```sh
-bun run db:logs
-bun run db:shell
-```
-
-### Preview the production build
-
-The production preview uses the same single-server layout as the class
-deployment. It generates the typed sync-engine artifacts, builds the Vue app,
-starts MongoDB, and serves the API and built pages from port 3000:
+### Production build and preview
 
 ```sh
 bun run preview
 ```
 
-Open <http://127.0.0.1:3000>. The health check at
-<http://127.0.0.1:3000/health> returns `ok` only when MongoDB is reachable and
-the frontend build exists. Reload a nested Vue route during deployment checks
-to verify that the server returns the application entry page rather than a
-404.
+This starts MongoDB, generates the typed API, builds Vue, and serves the API and
+frontend together at [127.0.0.1:3000](http://127.0.0.1:3000). The
+[/health](http://127.0.0.1:3000/health) endpoint returns `ok` when MongoDB is
+reachable and the frontend build exists.
 
-### Reset to an empty database
+The course-managed deployment uses the same single-server application. Its
+build and startup commands are `bun run build` and `bun run start`. Configure
+`MONGODB_URL`, `PUBLIC_ORIGIN`, and the listener address/port for that environment.
 
-The core journey begins with an empty database. This command permanently removes
-the local development MongoDB volume and all FriendlyFive development records:
+## Try the app
 
-```sh
-bun run db:reset
-bun run dev
-```
+Follow the [core journey](design/core-user-journey.md), or use these steps with
+synthetic accounts:
 
-## Verification
+1. Register the proposer. Enter an existing username or email for the counterpart
+   and optional resolver, or invite either person by an unused email. Share each
+   person's separate invitation link privately. New users choose their username
+   and password through their own link; the resolver can register before or
+   after the participants accept.
+2. Have the other participant review and accept the exact current version before
+   its cutoff. Acceptance fixes the terms and the resolver arrangement.
+3. After cutoff, submit an outcome. Ordinary evidence is optional. The other
+   participant may confirm or dispute it with a required explanation.
+4. For a disputed outcome, the agreed resolver may record a final decision with
+   an explanation. Without a resolver, a replacement report must be confirmed by
+   the other participant. Both may agree to VOID with no obligation.
+5. Complete any resulting stake outside the app. The owing person reports
+   completion, and the recipient confirms receipt or explains a dispute.
 
-Start MongoDB before running the tests. The test suite derives isolated database
-names from `MONGODB_URL` and refuses to reset a database unless it has the
-expected test-only name.
+For an empty local database, `bun run db:reset` permanently removes the local
+MongoDB volume and all development records. Then run `bun run dev` again.
+Database logs and an interactive shell are available through `bun run db:logs`
+and `bun run db:shell`.
+
+## Test and check
+
+Complete local setup above, then run:
 
 ```sh
 bun run db:up
 bun test
 bun run check
 bun run check:design
-bun run build:frontend
+bun run build
 ```
 
-These commands cover concept behavior, composition and HTTP integration,
-authentication cookies, access control, generated-artifact consistency,
-TypeScript, specification form, and the production frontend build. To inspect
-sync-engine's advisory diagnostics in full, run:
+Tests use guarded, isolated database names derived from `MONGODB_URL`.
+`check` verifies concept source, generated contracts, and TypeScript;
+`check:design` validates specification form. For framework advisories, run
+`bun run check:advisories`.
+
+An optional HTTP walkthrough creates identifiable synthetic accounts and
+agreements through the running app. Select the environment explicitly. It
+never resets or deletes records.
 
 ```sh
-bunx sync-engine check --show-advisories
+bun scripts/smoke-test.ts http://127.0.0.1:3000
 ```
 
-The successful P3 execution results are preserved in
-[`docs/p3-test-output.txt`](docs/p3-test-output.txt).
+### Validation results
 
-On October 18, 2026, the deployed app was also tested through the complete core
-journey with fresh synthetic accounts. The walkthrough covered required-field
-validation, email invitation and invited-account activation, agreement review
-and acceptance, automatic reporting availability at the server cutoff, outcome
-reporting and confirmation, obligation reporting and receipt confirmation, the
-final `COMPLETE` dashboard status, and session restoration after a reload. The
-completed production record is agreement
-`9dbef612-a0e1-45c3-81cf-96b4e186d050`. Automated composition tests separately
-cover outsider access restrictions and the dispute paths.
+Local checks on October 21, 2026 used Bun 1.4.2, MongoDB 8, and sync-engine
+1.1.0 against base commit `75524a0` plus the current changes.
 
-## Authentication and access control
+| Check | Result |
+| --- | --- |
+| Concept and HTTP suite | 55 tests passed across ten files |
+| Source, contracts, TypeScript, and specifications | Passed; 38 framework advisories |
+| Production build | Passed, with upstream browser-externalization warnings |
+| Clean source setup | Installation, generation, checks, tests, startup, health, and nested routes passed using the existing MongoDB container |
+| HTTP walkthrough | Confirmation, third-party resolution, fulfillment, resolver-free VOID, malformed inputs, outsider restrictions, and new-session persistence passed |
 
-Passwords are stored as Argon2id verifiers. Successful sign-in creates a
-30-minute server-side session and sends its identifier in a `Secure`,
-`HttpOnly`, `SameSite=Strict` cookie. The browser cannot read the session value,
-and signing out invalidates the server-side session before the cookie is
-cleared.
+Tests cover all four existing/new counterpart and resolver combinations,
+role-specific activation, obsolete invitations, stale acceptance, unauthorized
+reads and mutations, private evidence, and persisted state in a fresh application
+instance. Five concurrency tests reproduced defects before correction and now
+check that competing actions cannot both succeed or change accepted terms.
 
-The backend derives the acting user from that session. It does not trust a user
-identifier supplied by the browser. Agreement participants and accepted
-resolvers receive only the access their concept-owned roles allow. Invitation
-tokens identify an agreement, but possession of a token does not authorize an
-outsider to read or change it. Obligation details remain limited to the owing
-person and recipient.
+Manual browser checks confirmed immediate outcome and resolver-decision updates
+and session restoration after reload. [Desktop](docs/images/desktop-outcome.png)
+and [390-pixel phone-width](docs/images/phone-history.png) inspections covered
+long content and history. Phone inspection used an iframe, not a physical device.
+Screen-reader testing and manual photo uploads were not performed. The new
+invitation flow was also checked in the browser with two unregistered invitees,
+separate links, resolver registration before acceptance, the waiting screen,
+first-version acceptance, and subsequent resolver access.
 
-When a proposal names a counterpart email without an account, FriendlyFive
-reserves that normalized email and binds it to the proposal's opaque invitation.
-The link holder chooses their own username while activating that identity.
-Proposal terms remain private until the activated account is authenticated, and
-ordinary registration cannot claim a reserved email. Email ownership is not yet
-verified, so invitation links must be shared privately.
+The public host passed an earlier synthetic HTTP journey through fulfillment,
+a recorded dispute, resolver-free VOID, outsider read restrictions, and a new
+session. On October 21 its frontend still matched the earlier build, with
+deployment identifier `abd0351e-8ba7-465f-8e73-3a01c117e20a`; its Git revision
+was unavailable. **The current changes still require deployed validation of the
+resolver journey, persistence, access control, and error handling.**
 
-Evidence photos are compressed in the browser and validated again by the
-backend before MongoDB persistence. Only the agreement participants and
-designated resolver can retrieve resolution photos. Each eligible submission
-supports one photo with a 2 MB stored-image limit. Obligation photos remain
-limited to the owing person and recipient.
+## Architecture and access control
 
-## Design sources
+Concepts own their state and rules independently. The sync-engine
+[composition](design/compositions/FriendlyFive.md) coordinates them, opens a
+resolution case after acceptance, and records the losing stake after a final
+TRUE or FALSE outcome. VOID creates no obligation. Vue uses the generated typed
+HTTP client through [web/api.ts](web/api.ts).
 
-The files under `design/` are the maintained behavioral contract for the
-current implementation:
+| Concept | Responsibility |
+| --- | --- |
+| [Authenticating](design/concepts/Authenticating.md) | Accounts, passwords, and expiring sessions |
+| [Agreeing](design/concepts/Agreeing.md) | Proposals, immutable term versions, and acceptance |
+| [Linking](design/concepts/Linking.md) | Opaque, revocable invitation references |
+| [Resolving](design/concepts/Resolving.md) | Reports, disputes, confirmation, and final decisions |
+| [ObligationTracking](design/concepts/ObligationTracking.md) | Fulfillment reports and receipt confirmation |
 
-- [Core user journey](design/core-user-journey.md)
-- [Shared types](design/types.md)
-- [Concept specifications](design/concepts/)
-- [Application composition](design/compositions/FriendlyFive.md)
+Passwords use Argon2id. Sessions expire after 30 minutes and travel in Secure,
+HttpOnly, SameSite=Strict cookies. The backend derives the actor from the session
+and enforces permissions independently of frontend controls or supplied user IDs.
+Invitation links identify agreements without granting access to private terms.
+Accepted resolvers may review outcomes; fulfillment details remain private to
+the two participants. Optional JPEG, PNG, and WebP evidence photos have a 2 MB
+stored-image limit and the same role-based access as their reports.
 
-The `Design-Documents/` directory preserves the earlier P1 submission material
-as design history:
+Email ownership verification and automatic invitation delivery are not
+implemented. Share invitation links privately. Conditional database writes
+protect competing actions but do not provide multi-document crash recovery.
 
-- [Problem framing](Design-Documents/problem-framing.md)
-- [Application pitch](Design-Documents/application-pitch.md)
-- [Original concept design](Design-Documents/concept-design.md)
-- [UI sketches](Design-Documents/UI-sketches.md)
-- [Original user journey](Design-Documents/user-journey.md)
+## Earlier milestone materials
 
-When an earlier artifact and a maintained specification differ, the files under
-`design/` describe the current beta behavior.
-
-## Deployment and future work
-
-FriendlyFive is publicly deployed at
-[friendly-five.mit-sdg.dev](https://friendly-five.mit-sdg.dev/). Agreement-version
-and outcome-report histories are implemented. Email verification and automatic
-invitation delivery remain outside the current beta scope, so invitation links
-must be shared privately. Possible future additions include a user profile page
-with basic performance statistics. Additional usability testing, broader dashboard
-filtering, and policies for long-running completion disputes can be evaluated later.
+The maintained behavior is specified in `design/`. Earlier submissions are
+preserved in [Design-Documents/](Design-Documents/), the
+[P3 visual design study](design/FriendlyFive-Visual-Design-Study.pdf), and
+[P3 test output](docs/p3-test-output.txt). Previous recordings are available for
+[P2](https://drive.google.com/file/d/1LJoGqUKwzpq3sLEaH6UJ4NyfNUX2rSIS/view?usp=sharing)
+and [P3](https://drive.google.com/file/d/1mGXkJDHUEMHToegp6cs7LKL0_ci6V_rs/view?usp=sharing).

@@ -35,6 +35,9 @@ const revisionResolverUsername = ref("");
 const invitationToken = ref("");
 const copiedLink = ref(false);
 const linkError = ref("");
+const resolverToken = ref("");
+const resolverPending = ref(false);
+const copiedResolver = ref(false);
 
 const token = computed(() => String(route.params.token ?? ""));
 const agreementId = computed(() => String(route.params.agreement ?? ""));
@@ -46,6 +49,14 @@ const invitationUrl = computed(() => {
   });
   return new URL(location.href, window.location.origin).toString();
 });
+const resolverInvitationUrl = computed(() => resolverToken.value === "" ? "" :
+  new URL(router.resolve({ name: "agreement-invite", params: { token: resolverToken.value } }).href, window.location.origin).toString());
+
+async function copyResolverInvitation(): Promise<void> {
+  try { await navigator.clipboard.writeText(resolverInvitationUrl.value); copiedResolver.value = true; }
+  catch { linkError.value = "Copying failed. Select and copy the resolver URL below."; }
+}
+
 const canAccept = computed(
   () =>
     agreement.value?.status === "PENDING" &&
@@ -94,7 +105,7 @@ function acceptanceError(code: string): string {
 }
 
 function revisionError(code: string): string {
-  if (code === "NOT_FOUND") return "The resolver username was not found.";
+  if (code === "NOT_FOUND") return "Use an existing resolver username or an available email.";
   if (code === "FORBIDDEN") return "Only an agreement participant can propose changes.";
   if (code === "INVALID_REQUEST") {
     return "Change at least one term and choose a future cutoff. The current version may also have changed.";
@@ -182,6 +193,8 @@ async function loadAgreement(): Promise<void> {
   error.value = "";
   invitationToken.value = "";
   agreementHistory.value = [];
+  resolverPending.value = false;
+  resolverToken.value = "";
   linkError.value = "";
   copiedLink.value = false;
   try {
@@ -189,6 +202,15 @@ async function loadAgreement(): Promise<void> {
       ? await api.agreements.get({ agreement: agreementId.value })
       : await api.agreements.invite({ token: token.value });
     if ("error" in result) {
+      if (token.value !== "" && result.error === "FORBIDDEN") {
+        const setup = await api.agreements.invite.setup({ token: token.value });
+        if (!("error" in setup) && setup.invitedUser === currentUserId.value &&
+            setup.role === "RESOLVER" && setup.agreementStatus === "PENDING") {
+          agreement.value = null;
+          resolverPending.value = true;
+          return;
+        }
+      }
       agreement.value = null;
       error.value = invitationError(result.error);
       return;
@@ -202,6 +224,11 @@ async function loadAgreement(): Promise<void> {
     }
     agreementHistory.value = historyResult.history.versions;
     await loadInvitationLink(result);
+    if ("resolver" in result && (result.status === "PENDING" || result.status === "ACCEPTED") &&
+        (result.initiator === currentUserId.value || result.counterpart === currentUserId.value)) {
+      const resolverLink = await api.agreements["resolver-link"]({ agreement: result.agreement });
+      if (!("error" in resolverLink)) resolverToken.value = resolverLink.token;
+    }
   } catch {
     agreement.value = null;
     error.value = "FriendlyFive could not load this agreement. Try again.";
@@ -311,6 +338,13 @@ watch([token, agreementId], loadAgreement);
       <h1 id="agreement-heading">Loading the agreement…</h1>
     </div>
 
+    <div v-else-if="resolverPending" class="welcome-card content-card">
+      <p class="eyebrow">Resolver invitation</p>
+      <h1 id="agreement-heading">Waiting for the participants to agree</h1>
+      <p>Your account is ready. You can review this agreement once both participants accept the terms naming you as resolver.</p>
+      <button class="button button-secondary" type="button" @click="loadAgreement">Check agreement status</button>
+    </div>
+
     <div v-else-if="error && !agreement" class="welcome-card content-card">
       <p class="eyebrow">Agreement unavailable</p>
       <h1 id="agreement-heading">This agreement could not be opened.</h1>
@@ -396,6 +430,16 @@ watch([token, agreementId], loadAgreement);
           </div>
         </template>
         <p v-if="linkError" class="notice notice-error" role="alert">{{ linkError }}</p>
+      </section>
+
+      <section v-if="resolverInvitationUrl" class="invitation-box pending-invitation">
+        <h2>Invite the resolver</h2>
+        <p>Share this link privately with the designated resolver. They can register before or after the participants accept.</p>
+        <label for="agreement-resolver-url">Resolver invitation URL</label>
+        <div class="copy-row">
+          <input id="agreement-resolver-url" :value="resolverInvitationUrl" readonly @focus="($event.target as HTMLInputElement).select()" />
+          <button class="button button-secondary compact-button" type="button" @click="copyResolverInvitation">{{ copiedResolver ? "Copied" : "Copy" }}</button>
+        </div>
       </section>
 
       <section class="acceptance-card">
@@ -511,7 +555,7 @@ watch([token, agreementId], loadAgreement);
               <input id="revision-deadline" v-model="revisionDeadline" type="datetime-local" required :disabled="revising" />
             </div>
             <div class="form-field">
-              <label for="revision-resolver">Resolver username <span>optional</span></label>
+              <label for="revision-resolver">Resolver email or username <span>optional</span></label>
               <input id="revision-resolver" v-model="revisionResolverUsername" autocomplete="off" :disabled="revising" />
             </div>
           </div>

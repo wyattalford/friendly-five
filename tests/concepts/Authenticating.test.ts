@@ -38,6 +38,20 @@ describe("Authenticating", () => {
     await client.close();
   });
 
+  test("invitation identity preparation reuses active users and reserves new emails", async () => {
+    const authenticating = new AuthenticatingConcept(database);
+    const known = await authenticating.register({ username: "morgan", email: "morgan@example.com", password: "synthetic password" });
+    await expect(authenticating.invite({ identifier: "morgan" })).resolves.toEqual(known);
+    await expect(authenticating.invite({ identifier: " MORGAN@example.com " })).resolves.toEqual(known);
+    await expect(authenticating._availableEmail({ email: "alex@example.com" })).resolves.toEqual([{ availability: "AVAILABLE" }]);
+    const reserved = await authenticating.invite({ identifier: "Alex@example.com" });
+    await expect(authenticating._reserved({ user: reserved.user })).resolves.toEqual([reserved]);
+    await expect(authenticating._availableEmail({ email: "alex@example.com" })).resolves.toEqual([]);
+    await expect(authenticating.invite({ identifier: "alex@example.com" })).rejects.toThrow();
+    await expect(authenticating.invite({ identifier: "unknown-username" })).rejects.toThrow();
+    expect(await database.collection("authenticating.users").countDocuments()).toBe(2);
+  });
+
   test("registers, signs in, authenticates, and signs out", async () => {
     const now = new Date("2026-10-11T12:00:00.000Z");
     const authenticating = new AuthenticatingConcept(database, () => now);

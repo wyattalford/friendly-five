@@ -54,6 +54,8 @@ a seq of Reports with
 Rule: Each currentReport belongs to its case. Report authors, outcomes, evidence, and reportedAt are immutable.
 Rule: An evidenceImage or disputeImage is a JPEG, PNG, or WebP data URL containing at most 2 MB of decoded image data and always has its corresponding nonblank image name. Image names contain at most 120 characters and no control characters.
 Rule: resolvedAt exists exactly when status is FINAL. A FINAL case has a currentReport recording its final outcome.
+Rule: Concurrent attempts recheck the observed state. Only one competing transition succeeds for the same version or report. A losing attempt refuses and removes its new insert. Crash recovery across writes is not atomic.
+
 ```
 
 ## Actions

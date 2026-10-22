@@ -21,12 +21,8 @@ const initializing = ref(true);
 const passwordInput = ref<HTMLInputElement | null>(null);
 const mainContent = ref<HTMLElement | null>(null);
 const initialViewRendered = ref(false);
-const invitationSetup = ref<{
-  initiatorUsername: string;
-  counterpartUsername?: string;
-  counterpartEmail: string;
-  requiresRegistration: boolean;
-} | null>(null);
+type InvitationSetupResult = Awaited<ReturnType<typeof api.agreements.invite.setup>>;
+const invitationSetup = ref<Exclude<InvitationSetupResult, { error: unknown }> | null>(null);
 
 const invitationToken = computed(() => String(route.params.token ?? ""));
 
@@ -70,8 +66,8 @@ async function loadInvitationSetup(): Promise<void> {
       return;
     }
     invitationSetup.value = result;
-    username.value = result.counterpartUsername ?? "";
-    email.value = result.counterpartEmail;
+    username.value = result.recipientUsername ?? "";
+    email.value = result.recipientEmail;
     mode.value = result.requiresRegistration ? "register" : "sign-in";
     notice.value = "";
   } catch {
@@ -206,6 +202,7 @@ async function signOut(): Promise<void> {
       "error" in result ? "Your previous session ended. Sign in again." : "Signed out.",
       "success",
     );
+    await loadInvitationSetup();
   } catch {
     showNotice("FriendlyFive could not sign you out. Try again.", "error");
   } finally {
@@ -262,14 +259,19 @@ watch(invitationToken, () => loadInvitationSetup());
       <section v-else class="auth-layout" aria-labelledby="welcome-heading">
         <div class="auth-introduction">
           <template v-if="invitationSetup">
-            <p class="eyebrow">Agreement invitation</p>
+            <p class="eyebrow">{{ invitationSetup.role === "RESOLVER" ? "Resolver invitation" : "Agreement invitation" }}</p>
             <h1 id="welcome-heading">{{ invitationSetup.initiatorUsername }} invited you to FriendlyFive.</h1>
             <p class="intro" v-if="invitationSetup.requiresRegistration">
-              Create an account for <strong>{{ invitationSetup.counterpartEmail }}</strong> and choose
+              Create an account for <strong>{{ invitationSetup.recipientEmail }}</strong> and choose
               your own username. The invitation will open automatically afterward.
             </p>
             <p class="intro" v-else>
-              Sign in as <strong>{{ invitationSetup.counterpartUsername }}</strong> to review the proposal.
+              Sign in as <strong>{{ invitationSetup.recipientUsername }}</strong> to open the invitation.
+            </p>
+            <p v-if="invitationSetup.role === 'RESOLVER'" class="field-help">
+              {{ invitationSetup.agreementStatus === "PENDING"
+                ? "You are invited as resolver. The participants must accept your designation before you can review their agreement."
+                : "You are invited as resolver to review the accepted terms. You may decide an outcome only after a participant disputes it." }}
             </p>
           </template>
           <template v-else>

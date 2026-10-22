@@ -224,7 +224,7 @@ function requestError(code: string): string {
   if (code === "FORBIDDEN") return "You are not authorized to use this resolution case.";
   if (code === "NOT_FOUND") return "The resolution case could not be found.";
   if (code === "UNAUTHORIZED") return "Your session ended. Sign in and try again.";
-  if (code === "INVALID_REQUEST") return "This action is no longer available. Reloaded details may have changed.";
+  if (code === "INVALID_REQUEST") return "This action could not be saved. Check the required fields, then update the details and try again. Your entered text is kept.";
   if (code === "CONFLICT") return "The resulting obligation was already recorded.";
   if (code === "NETWORK_ERROR") return "FriendlyFive could not reach the server. Try again.";
   return "FriendlyFive could not complete that action. Try again.";
@@ -393,6 +393,7 @@ async function loadPage(showLoading = true): Promise<void> {
 }
 
 async function submitReport(): Promise<void> {
+  if (submitting.value) return;
   if (resolution.value === null) return;
   submitting.value = true;
   error.value = "";
@@ -428,6 +429,7 @@ async function submitReport(): Promise<void> {
 }
 
 async function confirmReport(): Promise<void> {
+  if (submitting.value) return;
   if (resolution.value === null || currentReport.value === null) return;
   submitting.value = true;
   error.value = "";
@@ -451,6 +453,7 @@ async function confirmReport(): Promise<void> {
 }
 
 async function disputeReport(): Promise<void> {
+  if (submitting.value) return;
   if (resolution.value === null || currentReport.value === null) return;
   const reason = disputeReason.value.trim();
   if (reason === "") {
@@ -477,7 +480,9 @@ async function disputeReport(): Promise<void> {
     await loadPage(false);
     notice.value = isResolver.value
       ? "Dispute recorded. You may submit a resolver decision."
-      : "Dispute recorded. The designated resolver may now decide, or a participant may submit a revised report.";
+      : agreement.value && "resolver" in agreement.value
+        ? "Dispute recorded. The designated resolver may now decide, or a participant may submit a revised report."
+        : "Dispute recorded. Either participant may propose a revised outcome, including voiding the agreement. The other participant must confirm it.";
   } catch {
     error.value = "FriendlyFive could not record the dispute. Try again.";
   } finally {
@@ -486,6 +491,7 @@ async function disputeReport(): Promise<void> {
 }
 
 async function decideOutcome(): Promise<void> {
+  if (submitting.value) return;
   if (resolution.value === null) return;
   const evidence = decisionEvidence.value.trim();
   if (evidence === "") {
@@ -519,6 +525,7 @@ async function decideOutcome(): Promise<void> {
 }
 
 async function reportCompletion(): Promise<void> {
+  if (submitting.value) return;
   if (obligation.value === null) return;
   submitting.value = true;
   error.value = "";
@@ -546,6 +553,7 @@ async function reportCompletion(): Promise<void> {
 }
 
 async function confirmCompletion(): Promise<void> {
+  if (submitting.value) return;
   if (obligation.value === null || currentCompletion.value === null) return;
   submitting.value = true;
   error.value = "";
@@ -569,6 +577,7 @@ async function confirmCompletion(): Promise<void> {
 }
 
 async function disputeCompletion(): Promise<void> {
+  if (submitting.value) return;
   if (obligation.value === null || currentCompletion.value === null) return;
   const evidence = completionDisputeEvidence.value.trim();
   if (evidence === "") {
@@ -756,7 +765,22 @@ watch(agreementId, () => loadPage());
       </section>
 
       <p v-if="notice" class="notice notice-success" role="status">{{ notice }}</p>
-      <p v-if="error" class="notice notice-error" role="alert">{{ error }}</p>
+      <div v-if="error" class="notice notice-error" role="alert">
+        <p>{{ error }}</p>
+        <button class="button button-secondary" type="button" :disabled="submitting || loading" @click="loadPage(false)">
+          Update details
+        </button>
+      </div>
+
+      <section v-if="resolution.status === 'DISPUTED'" class="action-card dispute-guidance">
+        <h2>{{ 'resolver' in agreement ? "How to settle this disagreement" : "Agree on a revised outcome" }}</h2>
+        <p v-if="'resolver' in agreement">
+          {{ agreement.resolverUsername }} may record a final decision. Either participant may also submit a revised report for the other to confirm.
+        </p>
+        <p v-else>
+          No resolver was selected. Either participant may submit a revised outcome, including voiding the agreement with no obligation. The other participant must confirm it. Until then, the disagreement remains open.
+        </p>
+      </section>
 
       <section v-if="resolution.status === 'OPEN' && !cutoffPassed" class="action-card">
         <h2>Reporting has not opened</h2>

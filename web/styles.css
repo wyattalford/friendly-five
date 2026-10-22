@@ -1404,3 +1404,23 @@ h1 {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Keep user-written terms and evidence readable, including pasted URLs. */
+.agreement-header > div {
+  min-width: 0;
+}
+
+.terms-card p,
+.terms-card dd,
+.history-details dd,
+.history-claim,
+.evidence-block p,
+.dispute-block p,
+.obligation-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dispute-guidance {
+  border-left: 4px solid #326d94;
+}

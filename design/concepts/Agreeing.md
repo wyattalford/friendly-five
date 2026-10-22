@@ -21,6 +21,8 @@ external User
 
 AgreementStatus is PENDING or ACCEPTED or REJECTED or WITHDRAWN
   The lifecycle state of an agreement.
+InvitationRole is COUNTERPART or RESOLVER
+  The role named by an invitation to a current pending or accepted agreement.
 ProposalValidity is VALID or INVALID
   A marker returned when prospective proposal terms pass validation.
 ```
@@ -51,6 +53,8 @@ a set of Versions with
 Rule: The initiator backs the claim being true and the counterpart backs it being false. Each stake states what that party owes if they lose. These roles remain fixed across revisions.
 Rule: Each agreement's currentVersion is its latest version. Version contents are immutable and earlier versions are retained.
 Rule: acceptedAt exists exactly when status is ACCEPTED.
+Rule: Concurrent attempts recheck the observed state. Only one competing transition succeeds for the same version or report. A losing attempt refuses and removes its new insert. Crash recovery across writes is not atomic.
+
 ```
 
 ## Actions
@@ -162,6 +166,10 @@ _version(version: Version) : optional (agreement: Agreement, number: Number, aut
   Answers immutable version terms, or no row when the version is unknown.
 _versions(agreement: Agreement) : many (version: Version, number: Number, author: User, claim: String, deadline: DateTime, initiatorStake: String, counterpartStake: String, exceptions: String, resolutionRule: String, resolver?: User)
   Answers all immutable versions for the agreement in ascending version-number order, or no rows when the agreement is unknown or has no versions.
+_revisionOpen(agreement: Agreement, user: User, expectedVersion: Version) : optional (agreement: Agreement)
+  Answers agreement only when it is pending, user is a participant, expectedVersion is current, and its deadline has not passed. Answers no row otherwise.
+_invitedRole(agreement: Agreement, user: User) : optional (role: InvitationRole)
+  Answers COUNTERPART for the counterpart, otherwise RESOLVER for the current designated resolver, only while agreement is PENDING or ACCEPTED. Answers no row otherwise. This does not grant read access or action authority.
 _designatedResolver(agreement: Agreement) : many (resolver: User)
   Answers the designated resolver when one exists, or no rows when the agreement has no resolver or is unknown.
 _canView(agreement: Agreement, user: User) : optional (agreement: Agreement)

@@ -118,6 +118,25 @@ export class AuthenticatingConcept {
     return { user };
   }
 
+  async invite({ identifier }: { identifier: string }) {
+    const email = normalizeEmail(identifier);
+    const byEmail = validEmail(email);
+    const account = await this.users.findOne(byEmail ? { email } : { username: identifier });
+    if (account?.passwordVerifier !== undefined) return { user: account._id };
+    if (account !== null) throw new ReservationNotAvailable("That email is already registered or invited.");
+    if (!byEmail) throw new InvalidCredentials("Use an existing username or a valid email to invite someone.");
+    await ensureUserIndexesOnce(this.users);
+    const user = crypto.randomUUID();
+    try {
+      await this.users.insertOne({ _id: user, email });
+    } catch (error) {
+      if (error instanceof MongoServerError && error.code === 11_000)
+        throw new ReservationNotAvailable("That email is already registered or invited.");
+      throw error;
+    }
+    return { user };
+  }
+
   async activate({ user, username, password }: { user: string; username: string; password: string }) {
     if (username.trim() === "" || validEmail(normalizeEmail(username)) || password.trim() === "") {
       throw new InvalidCredentials("A username and password are required.");
@@ -209,6 +228,17 @@ export class AuthenticatingConcept {
         : { username: identifier, passwordVerifier: { $exists: true } },
     );
     return account === null ? [] : [{ user: account._id }];
+  }
+
+  async _reservedByEmail({ email }: { email: string }) {
+    const account = await this.users.findOne({ email: normalizeEmail(email), passwordVerifier: { $exists: false } });
+    return account === null ? [] : [{ user: account._id }];
+  }
+
+  async _availableEmail({ email }: { email: string }) {
+    const normalized = normalizeEmail(email);
+    if (!validEmail(normalized) || await this.users.findOne({ email: normalized })) return [];
+    return [{ availability: "AVAILABLE" as const }];
   }
 
   async _reserved({ user }: { user: string }) {

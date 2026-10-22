@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
 import { MongoClient, type Db } from "mongodb";
 import { createFriendlyFive } from "../../src/application.ts";
@@ -38,13 +38,14 @@ describe("agreement invitation boundary", () => {
   });
 
   beforeEach(resetDatabase);
+  afterEach(() => setSystemTime());
 
   afterAll(async () => {
     await resetDatabase();
     await client.close();
   });
 
-  test("lets a person invited by email choose a username before reviewing", async () => {
+  test("carries an email invite through resolver revision, dispute, and confirmed fulfillment", async () => {
     const { application, gateway } = createFriendlyFive(database);
     const handler = createHttpHandler({ application, gateway, policy });
 
@@ -57,10 +58,10 @@ describe("agreement invitation boundary", () => {
 
     const termsForNewUser = {
       counterpartIdentifier: "new-alex@example.com",
-      claim: "MIT wins its next game",
+      claim: "MIT wins its next game by more than seven points, including overtime",
       deadline: new Date(Date.now() + 60_000).toISOString(),
       initiatorStake: "buy lunch",
-      counterpartStake: "buy coffee",
+      counterpartStake: "buy lunch",
       exceptions: "A cancellation is void",
       resolutionRule: "Use the official box score",
     };
@@ -74,9 +75,9 @@ describe("agreement invitation boundary", () => {
 
     const prematureResolver = await handler(post("/agreements/propose", {
       ...termsForNewUser,
-      resolverUsername: "morgan",
+      resolverUsername: "missing-resolver",
     }, wyattCookie));
-    expect(prematureResolver.status).toBe(400);
+    expect(prematureResolver.status).toBe(404);
     expect(await database.collection("authenticating.users").findOne({ email: "new-alex@example.com" })).toBeNull();
 
     const abandonedResponse = await handler(post("/agreements/propose", {
@@ -86,7 +87,7 @@ describe("agreement invitation boundary", () => {
     expect(abandonedResponse.status).toBe(200);
     const abandoned = await abandonedResponse.json() as { agreement: string; version: string };
     expect(await database.collection("authenticating.users").findOne({ email: "abandoned@example.com" })).not.toBeNull();
-    const withdrawn = await handler(post("/agreements/withdraw", abandoned, wyattCookie));
+    const withdrawn = await handler(post("/agreements/withdraw", { agreement: abandoned.agreement, version: abandoned.version }, wyattCookie));
     expect(withdrawn.status).toBe(200);
     expect(await database.collection("authenticating.users").findOne({ email: "abandoned@example.com" })).toBeNull();
 
@@ -107,9 +108,9 @@ describe("agreement invitation boundary", () => {
 
     const setup = await handler(post("/agreements/invite/setup", { token: invitation.token }));
     expect(setup.status).toBe(200);
-    expect(await setup.json()).toEqual({
+    expect(await setup.json()).toMatchObject({
       initiatorUsername: "wyatt",
-      counterpartEmail: "new-alex@example.com",
+      recipientEmail: "new-alex@example.com",
       requiresRegistration: true,
     });
 
@@ -134,17 +135,77 @@ describe("agreement invitation boundary", () => {
       status: "PENDING",
     });
 
+    // The email invitation starts without a resolver. Add Morgan only after
+    // activation, and require acceptance of the version carrying that authority.
+    const revisedResponse = await handler(post("/agreements/revise", {
+      agreement: invitation.agreement,
+      expectedVersion: invitation.version,
+      claim: termsForNewUser.claim,
+      deadline: termsForNewUser.deadline,
+      initiatorStake: termsForNewUser.initiatorStake,
+      counterpartStake: termsForNewUser.counterpartStake,
+      exceptions: termsForNewUser.exceptions,
+      resolutionRule: termsForNewUser.resolutionRule,
+      resolverUsername: "morgan",
+    }, wyattCookie));
+    expect(revisedResponse.status).toBe(200);
+    const revised = await revisedResponse.json() as { version: string };
+    expect((await handler(post("/agreements/accept", {
+      agreement: invitation.agreement, version: invitation.version,
+    }, invitedCookie))).status).toBe(400);
+    const reviewed = await handler(post("/agreements/get", { agreement: invitation.agreement }, invitedCookie));
+    expect(await reviewed.json()).toMatchObject({ version: revised.version, resolverUsername: "morgan", number: 2 });
     const accepted = await handler(post("/agreements/accept", {
       agreement: invitation.agreement,
-      version: invitation.version,
+      version: revised.version,
     }, invitedCookie));
     expect(accepted.status).toBe(200);
+
+    const morganSignIn = await handler(post("/auth/sign-in", { username: "morgan", password: "safe password" }));
+    const morganCookie = morganSignIn.headers.get("set-cookie")?.split(";", 1)[0];
+    if (!morganCookie) throw new Error("Expected Morgan's session cookie.");
+    const caseResponse = await handler(post("/resolutions/by-agreement", { agreement: invitation.agreement }, morganCookie));
+    expect(caseResponse.status).toBe(200);
+    const resolution = await caseResponse.json() as { case: string };
+    setSystemTime(new Date(Date.now() + 61_000));
+    const reported = await handler(post("/resolutions/report", {
+      case: resolution.case, outcome: "TRUE", evidence: "MIT won by exactly seven points.",
+    }, wyattCookie));
+    expect(reported.status).toBe(200);
+    const report = await reported.json() as { report: string };
+    expect((await handler(post("/resolutions/dispute", {
+      case: resolution.case, report: report.report, reason: "Exactly seven is not more than seven.",
+    }, invitedCookie))).status).toBe(200);
+    expect((await handler(post("/resolutions/decide", {
+      case: resolution.case, outcome: "FALSE", evidence: "The official margin is seven, below the accepted winning condition.",
+    }, morganCookie))).status).toBe(200);
+    const obligationResponse = await handler(post("/obligations/by-agreement", { agreement: invitation.agreement }, wyattCookie));
+    expect(obligationResponse.status).toBe(200);
+    const obligation = await obligationResponse.json() as { obligation: string; owing: string; recipient: string; description: string };
+    const wyattResponse = await handler(post("/auth/current", {}, wyattCookie));
+    const wyatt = await wyattResponse.json() as { user: string };
+    expect(obligation).toMatchObject({ owing: wyatt.user, recipient: reserved?._id, description: "buy lunch" });
+    expect((await handler(post("/obligations/get", { obligation: obligation.obligation }, morganCookie))).status).toBe(403);
+    const completed = await handler(post("/obligations/report", {
+      obligation: obligation.obligation, evidence: "Bought Alex lunch at Chipotle.",
+    }, wyattCookie));
+    expect(completed.status).toBe(200);
+    const completion = await completed.json() as { report: string };
+    expect((await handler(post("/obligations/confirm", {
+      obligation: obligation.obligation, report: completion.report,
+    }, invitedCookie))).status).toBe(200);
+    for (const cookie of [wyattCookie, invitedCookie]) {
+      const dashboard = await handler(post("/agreements/list", {}, cookie));
+      expect(await dashboard.json()).toMatchObject({ dashboard: { agreements: expect.arrayContaining([
+        expect.objectContaining({ agreement: invitation.agreement, obligationStatus: "COMPLETE" }),
+      ]) } });
+    }
 
     const claimedSetup = await handler(post("/agreements/invite/setup", { token: invitation.token }));
     expect(claimedSetup.status).toBe(200);
     expect(await claimedSetup.json()).toMatchObject({
-      counterpartUsername: "alex-chose-this",
-      counterpartEmail: "new-alex@example.com",
+      recipientUsername: "alex-chose-this",
+      recipientEmail: "new-alex@example.com",
       requiresRegistration: false,
     });
   });
@@ -219,10 +280,10 @@ describe("agreement invitation boundary", () => {
       post("/agreements/invite/setup", { token: invitation.token }),
     );
     expect(existingAccountSetup.status).toBe(200);
-    expect(await existingAccountSetup.json()).toEqual({
+    expect(await existingAccountSetup.json()).toMatchObject({
       initiatorUsername: "wyatt",
-      counterpartUsername: "alex",
-      counterpartEmail: "alex@example.com",
+      recipientUsername: "alex",
+      recipientEmail: "alex@example.com",
       requiresRegistration: false,
     });
 

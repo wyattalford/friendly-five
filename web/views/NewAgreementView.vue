@@ -15,7 +15,9 @@ const resolutionRule = ref("");
 const submitting = ref(false);
 const error = ref("");
 const copied = ref(false);
-const invitation = ref<{ agreement: string; version: string; link: string; token: string; requiresRegistration: boolean } | null>(null);
+type ProposalResult = Awaited<ReturnType<typeof api.agreements.propose>>;
+const invitation = ref<Exclude<ProposalResult, { error: unknown }> | null>(null);
+const copiedResolver = ref(false);
 
 const invitationUrl = computed(() => {
   if (invitation.value === null) return "";
@@ -26,11 +28,16 @@ const invitationUrl = computed(() => {
   return new URL(location.href, window.location.origin).toString();
 });
 
+const resolverInvitationUrl = computed(() => {
+  if (!invitation.value || !("resolverToken" in invitation.value) || !invitation.value.resolverToken) return "";
+  return new URL(router.resolve({ name: "agreement-invite", params: { token: invitation.value.resolverToken } }).href, window.location.origin).toString();
+});
+
 function proposalError(code: string): string {
-  if (code === "NOT_FOUND") return "The counterpart or resolver username was not found.";
+  if (code === "NOT_FOUND") return "Use an existing username or an available email for each person.";
   if (code === "CONFLICT") return "That email already has an account or a pending invitation.";
   if (code === "INVALID_REQUEST") {
-    return "Check the required terms and future deadline. If the counterpart is new, leave the resolver blank and add one after they create their account.";
+    return "Check the required terms and choose a future cutoff.";
   }
   if (code === "UNAUTHORIZED") return "Your session ended. Sign in and try again.";
   if (code === "NETWORK_ERROR") return "FriendlyFive could not reach the server. Try again.";
@@ -70,10 +77,11 @@ async function submitProposal(): Promise<void> {
   }
 }
 
-async function copyInvitation(): Promise<void> {
+async function copyInvitation(recipient: "counterpart" | "resolver" = "counterpart"): Promise<void> {
   try {
-    await navigator.clipboard.writeText(invitationUrl.value);
-    copied.value = true;
+    await navigator.clipboard.writeText(recipient === "resolver" ? resolverInvitationUrl.value : invitationUrl.value);
+    if (recipient === "resolver") copiedResolver.value = true;
+    else copied.value = true;
   } catch {
     error.value = "Copying failed. Select and copy the invitation URL below.";
   }
@@ -83,7 +91,7 @@ async function copyInvitation(): Promise<void> {
 <template>
   <section v-if="invitation" class="page-content welcome-card content-card" aria-labelledby="created-heading">
     <p class="eyebrow">Proposal created</p>
-    <h1 id="created-heading">Send the invitation to your counterpart.</h1>
+    <h1 id="created-heading">{{ resolverInvitationUrl ? "Share the invitations." : "Send the invitation to your counterpart." }}</h1>
     <p class="intro">
       <template v-if="invitation.requiresRegistration">
         This email did not have an account, so FriendlyFive associated it with this invitation.
@@ -96,12 +104,21 @@ async function copyInvitation(): Promise<void> {
     </p>
 
     <div class="invitation-box">
-      <label for="invitation-url">Invitation URL</label>
+      <label for="invitation-url">Counterpart invitation URL</label>
       <div class="copy-row">
         <input id="invitation-url" :value="invitationUrl" readonly @focus="($event.target as HTMLInputElement).select()" />
-        <button class="button button-secondary compact-button" type="button" @click="copyInvitation">
+        <button class="button button-secondary compact-button" type="button" :aria-label="copied ? 'Counterpart link copied' : 'Copy counterpart invitation link'" @click="copyInvitation()">
           {{ copied ? "Copied" : "Copy" }}
         </button>
+      </div>
+    </div>
+
+    <div v-if="resolverInvitationUrl" class="invitation-box">
+      <label for="resolver-invitation-url">Resolver invitation URL</label>
+      <p class="field-help">Share this link privately with the resolver. It opens their registration or sign-in flow, separately from your counterpart’s link.</p>
+      <div class="copy-row">
+        <input id="resolver-invitation-url" :value="resolverInvitationUrl" readonly @focus="($event.target as HTMLInputElement).select()" />
+        <button class="button button-secondary compact-button" type="button" :aria-label="copiedResolver ? 'Resolver link copied' : 'Copy resolver invitation link'" @click="copyInvitation('resolver')">{{ copiedResolver ? "Copied" : "Copy" }}</button>
       </div>
     </div>
 
@@ -134,15 +151,19 @@ async function copyInvitation(): Promise<void> {
         <div class="field-grid">
           <div class="form-field">
             <label for="counterpart">Counterpart email or username</label>
-            <input id="counterpart" v-model="counterpartIdentifier" required autocomplete="off" :disabled="submitting" />
-            <p class="field-help">Use a username for an existing account, or an email to invite someone new.</p>
+            <input id="counterpart" v-model="counterpartIdentifier" required autocomplete="off" aria-describedby="counterpart-help invitation-resolver-help" :disabled="submitting" />
+            <p id="counterpart-help" class="field-help">Use an existing account’s username or email, or invite someone new by email.</p>
           </div>
           <div class="form-field">
-            <label for="resolver">Resolver username <span>optional</span></label>
-            <input id="resolver" v-model="resolverUsername" autocomplete="off" :disabled="submitting" />
-            <p class="field-help">The resolver may decide the outcome after a dispute.</p>
+            <label for="resolver">Resolver email or username <span>optional</span></label>
+            <input id="resolver" v-model="resolverUsername" autocomplete="off" aria-describedby="resolver-help invitation-resolver-help" :disabled="submitting" />
+            <p id="resolver-help" class="field-help">Use an existing account’s username or email, or invite a new resolver by email. Either participant may be the resolver if both agree.</p>
           </div>
         </div>
+        <p id="invitation-resolver-help" class="field-help">
+          You can invite a counterpart and a resolver who haven’t registered yet. You’ll get a separate link for each person.
+          Both participants agree to the resolver when accepting the terms.
+        </p>
       </fieldset>
 
       <fieldset>

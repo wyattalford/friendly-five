@@ -10,6 +10,7 @@ type LinkDocument = {
   owner: string;
   item: string;
   token: string;
+  recipient?: string;
   status: LinkStatus;
 };
 
@@ -28,14 +29,14 @@ export class LinkingConcept {
     this.links = db.collection<LinkDocument>("linking.links");
   }
 
-  async create({ owner, item }: { owner: string; item: string }) {
+  async create({ owner, item, recipient }: { owner: string; item: string; recipient?: string }) {
     await ensureIndexes(this.links);
 
     for (;;) {
       const link = crypto.randomUUID();
       const token = crypto.randomUUID();
       try {
-        await this.links.insertOne({ _id: link, owner, item, token, status: "ACTIVE" });
+        await this.links.insertOne({ _id: link, owner, item, token, status: "ACTIVE", ...(recipient === undefined ? {} : { recipient }) });
         return { link, token };
       } catch (error) {
         if (!(error instanceof MongoServerError) || error.code !== 11_000) throw error;
@@ -51,9 +52,19 @@ export class LinkingConcept {
 
   async _activeForItem({ item }: { item: string }) {
     const record = await this.links.findOne(
-      { item, status: "ACTIVE" },
+      { item, status: "ACTIVE", recipient: { $exists: false } },
       { sort: { _id: 1 } },
     );
+    return record === null ? [] : [{ link: record._id, token: record.token }];
+  }
+
+  async _recipient({ token, fallback }: { token: string; fallback: string }) {
+    const record = await this.links.findOne({ token, status: "ACTIVE" });
+    return record === null ? [] : [{ user: record.recipient ?? fallback }];
+  }
+
+  async _forRecipient({ item, recipient }: { item: string; recipient: string }) {
+    const record = await this.links.findOne({ item, recipient, status: "ACTIVE" }, { sort: { _id: 1 } });
     return record === null ? [] : [{ link: record._id, token: record.token }];
   }
 

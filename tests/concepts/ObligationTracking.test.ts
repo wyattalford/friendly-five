@@ -33,6 +33,28 @@ describe("ObligationTracking", () => {
   beforeEach(resetDatabase);
   afterAll(async () => { await resetDatabase(); await client.close(); });
 
+  test("concurrent completion submissions and reviews succeed once", async () => {
+    const tracking = new ObligationTrackingConcept(database);
+    const created = await tracking.record({ item: "race", owing: "alex", recipient: "wyatt", description: "lunch" });
+    const submissions = await Promise.allSettled(Array.from({ length: 8 }, () =>
+      tracking.reportCompletion({ user: "alex", obligation: created.obligation }),
+    ));
+    expect(submissions.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const [current] = await tracking._current({ obligation: created.obligation });
+    if (!current) throw new Error("Expected current completion");
+    const reviews = await Promise.allSettled([
+      tracking.confirmReceipt({ user: "wyatt", obligation: created.obligation, report: current.report }),
+      tracking.disputeReceipt({ user: "wyatt", obligation: created.obligation, report: current.report, evidence: "Not received" }),
+    ]);
+    expect(reviews.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const [record] = await tracking._get({ obligation: created.obligation });
+    if (record?.status === "COMPLETE") {
+      const [report] = await tracking._current({ obligation: created.obligation });
+      expect(report).not.toHaveProperty("disputeEvidence");
+    }
+    expect(await database.collection("obligationTracking.reports").countDocuments()).toBe(1);
+  });
+
   test("records, reports, and confirms an obligation", async () => {
     const tracking = new ObligationTrackingConcept(database);
     const created = await tracking.record({ item: "agreement-true", owing: "alex", recipient: "wyatt", description: "lunch" });
